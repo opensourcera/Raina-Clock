@@ -5,7 +5,7 @@
 
 // Location Settings
 // #define WEATHER_ZIP_CODE "90210"
-#define WEATHER_ZIP_CODE ""
+#define WEATHER_ZIP_CODE "30062"        // Marietta, GA
 
 // Coordinates (Fallback if USE_ZIP_CODE is false)
 // #define WEATHER_API_LATITUDE "34.10313"
@@ -24,7 +24,7 @@
 // Note: We use POSIX strings for efficiency to avoid bundling a giant tzdata lookup table.
 // Find your region's POSIX string here: https://gist.github.com/alwynallan/24d96091655391107939
 #define NTP_SERVER "pool.ntp.org"
-#define TIMEZONE_DEFAULT "UTC"       // IANA Timezone string (e.g. America/Los_Angeles)
+#define TIMEZONE_DEFAULT "America/New_York"   // IANA Timezone string (e.g. America/Los_Angeles)
 #define USE_24_HOUR_FORMAT false
 // Some common timezone strings:
 // #define TIMEZONE_DEFAULT "America/New_York"
@@ -79,7 +79,7 @@ extern int getCurrentThemeFlavor();
 #define API_SERVER_ENABLED true
 
 // Network Defaults
-#define DEFAULT_HOSTNAME "cyd-weather-station"
+#define DEFAULT_HOSTNAME "cyd-alarm-clock"
 
 // Sleep Schedule Defaults
 #define DEFAULT_SLEEP_SCHEDULE_ENABLED false
