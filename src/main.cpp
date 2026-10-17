@@ -1,6 +1,7 @@
 #include "todo_manager.h"
 #include "ui_todo.h"
 #include "alarm_manager.h"
+#include "ui_wifi.h"
 #include "audio_player.h"
 #include "ui_alarm.h"
 #include "time_utils.h"
@@ -624,6 +625,8 @@ void loop() {
         bool isConnected = (wifi.getState() == WIFI_STATE_CONNECTED);
         if (wifi.getState() == WIFI_STATE_AP_MODE) {
             updateWifiAPMode(wifi.getAPSSID().c_str());
+            static bool offeredWifiSetup = false;
+            if (!offeredWifiSetup) { offeredWifiSetup = true; showWifiSetup(); }   // no network yet: open the picker once per boot
         } else {
             updateWifiStatus(isConnected);
         }

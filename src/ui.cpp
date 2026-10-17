@@ -1,6 +1,7 @@
 #include "ui.h"
 #include "ui_todo.h"
 #include "ui_trip.h"
+#include "ui_wifi.h"
 #include <Arduino.h>
 #include "config/config.h"
 #include "settings_manager.h"
@@ -61,8 +62,8 @@ static void close_wifi_info_cb(lv_event_t * e) {
 }
 
 static void wifi_icon_click_cb(lv_event_t * e) {
-    if (WiFi.status() != WL_CONNECTED && WiFi.getMode() != WIFI_AP) return;
     if (wifi_info_dialog != nullptr) return;
+    if (WiFi.status() != WL_CONNECTED) { showWifiSetup(); return; }   // not connected: tapping the icon opens the picker
 
     bool isLargeScreen = (lv_disp_get_hor_res(NULL) >= 480 || lv_disp_get_ver_res(NULL) >= 480);
 
@@ -992,6 +993,9 @@ void initUI() {
     lv_obj_clear_flag(right_col, LV_OBJ_FLAG_SCROLLABLE);
 
     // --- Left column items ---
+
+    // Wi-Fi setup button (cyd-alarm-clock): scan, pick, type the password on screen
+    createWifiSettingsButton(left_col, isLargeScreen);
 
     // Unit (C/F) row
     lv_obj_t * unit_row = lv_obj_create(left_col);
