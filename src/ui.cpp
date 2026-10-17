@@ -1,4 +1,6 @@
 #include "ui.h"
+#include "ui_todo.h"
+#include "ui_trip.h"
 #include <Arduino.h>
 #include "config/config.h"
 #include "settings_manager.h"
@@ -519,9 +521,9 @@ void initUI() {
     // Header Title (Time/App Name)
     header_title = lv_label_create(header);
 #ifdef APP_VERSION
-    lv_label_set_text(header_title, isLandscape ? "CYD Weather Station\n" APP_VERSION : "CYD Weather\nStation\n" APP_VERSION);
+    lv_label_set_text(header_title, isLandscape ? "CYD Alarm Clock\n" APP_VERSION : "CYD Weather\nStation\n" APP_VERSION);
 #else
-    lv_label_set_text(header_title, isLandscape ? "CYD Weather Station" : "CYD Weather\nStation");
+    lv_label_set_text(header_title, isLandscape ? "CYD Alarm Clock" : "CYD Weather\nStation");
 #endif
     lv_obj_set_style_text_color(header_title, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).text), LV_PART_MAIN);
     lv_obj_align(header_title, LV_ALIGN_LEFT_MID, 10, 0);
@@ -579,8 +581,8 @@ void initUI() {
     lv_obj_set_style_text_color(tab_btns, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).peach), LV_PART_ITEMS | LV_STATE_CHECKED);
 
     // Adjust button padding and gaps to prevent text cramping in portrait mode (where width is only 240px)
-    lv_obj_set_style_pad_left(tab_btns, isLandscape ? 8 : 2, LV_PART_ITEMS);
-    lv_obj_set_style_pad_right(tab_btns, isLandscape ? 8 : 2, LV_PART_ITEMS);
+    lv_obj_set_style_pad_left(tab_btns, isLandscape ? 3 : 1, LV_PART_ITEMS);   // six tabs: tighter than upstream
+    lv_obj_set_style_pad_right(tab_btns, isLandscape ? 3 : 1, LV_PART_ITEMS);
     lv_obj_set_style_pad_top(tab_btns, 4, LV_PART_ITEMS);
     lv_obj_set_style_pad_bottom(tab_btns, 4, LV_PART_ITEMS);
     lv_obj_set_style_pad_gap(tab_btns, isLandscape ? 4 : 1, LV_PART_MAIN);
@@ -592,10 +594,12 @@ void initUI() {
     lv_obj_clear_flag(tab_content, LV_OBJ_FLAG_SCROLL_MOMENTUM);
 
     // Create the tabs
-    lv_obj_t * tab_curr = lv_tabview_add_tab(tabview, isLandscape ? "Current" : "Now");
-    lv_obj_t * tab_fore = lv_tabview_add_tab(tabview, isLandscape ? "Forecast" : "Fore");
-    lv_obj_t * tab_hourly = lv_tabview_add_tab(tabview, isLandscape ? "Hourly" : "Hour");
-    lv_obj_t * tab_settings = lv_tabview_add_tab(tabview, isLandscape ? "Settings" : "Setup");
+    lv_obj_t * tab_curr = lv_tabview_add_tab(tabview, "Now");
+    lv_obj_t * tab_fore = lv_tabview_add_tab(tabview, isLandscape ? "Days" : "Day");
+    lv_obj_t * tab_hourly = lv_tabview_add_tab(tabview, isLandscape ? "Hours" : "Hr");
+    lv_obj_t * tab_todo = lv_tabview_add_tab(tabview, isLandscape ? "To-do" : "Todo");
+    lv_obj_t * tab_trip = lv_tabview_add_tab(tabview, "Trip");
+    lv_obj_t * tab_settings = lv_tabview_add_tab(tabview, isLandscape ? "Setup" : "Set");
 
     // Set base color & padding on tabs
     // NOTE: Do NOT clear LV_OBJ_FLAG_SCROLLABLE on the tab panels —
@@ -614,6 +618,12 @@ void initUI() {
     lv_obj_set_scrollbar_mode(tab_fore, LV_SCROLLBAR_MODE_OFF);
     lv_obj_set_scrollbar_mode(tab_hourly, LV_SCROLLBAR_MODE_OFF);
     lv_obj_set_scrollbar_mode(tab_settings, LV_SCROLLBAR_MODE_AUTO);
+    // To-do and Trip tabs (cyd-alarm-clock additions, see ui_todo.cpp and ui_trip.cpp)
+    lv_obj_set_style_bg_color(tab_todo, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).base), LV_PART_MAIN);
+    lv_obj_set_style_pad_all(tab_todo, 8, LV_PART_MAIN);
+    lv_obj_set_scrollbar_mode(tab_todo, LV_SCROLLBAR_MODE_AUTO);
+    createTodoTab(tab_todo, isLandscape, isLargeScreen);
+    createTripTab(tab_trip, tabview, 4, isLandscape, isLargeScreen);
 
     // Create Hourly Forecast Chart
     hourly_chart = lv_chart_create(tab_hourly);
@@ -1681,6 +1691,7 @@ void updateWeatherUI(float temperature, int humidity, const char* status, int we
 void updateTimeUI(const char* time_str) {
     lv_label_set_text(time_label, time_str);
     updateScreenSaverTime(time_str);
+    tripSetTime(time_str);
 }
 
 void updateForecastUI(const WeatherData& data) {
@@ -1784,7 +1795,7 @@ void updateFooterUI(const char* update_time, const char* city) {
 }
 
 void setUIActiveTab(int index) {
-    if (tabview_obj != nullptr && index >= 0 && index < 4) {
+    if (tabview_obj != nullptr && index >= 0 && index < 6) {
         lv_tabview_set_act(tabview_obj, index, LV_ANIM_OFF);
     }
 }

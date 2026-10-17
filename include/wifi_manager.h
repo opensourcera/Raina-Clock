@@ -7,6 +7,7 @@
 #include <ESPmDNS.h>
 #include <DNSServer.h>
 #include <WebServer.h>
+#include <FS.h>
 #include <ImprovWiFiLibrary.h>
 #endif
 
@@ -49,11 +50,15 @@ private:
     DNSServer* _dnsServer = nullptr;
     WebServer* _webServer = nullptr;
     ImprovWiFi* _improv = nullptr;
+    fs::File _uploadFile;   // fs:: because TFT_eSPI turns the FS globals off
     void startWebServer();
     void stopWebServer();
     void handleScreenshot();
     void handleSettings();
     void handleSettingsSave();
+    void handleTodo();
+    void handleAlarm();
+    void handleMusicUpload();
     void registerOTARoutes();
 #endif
 };

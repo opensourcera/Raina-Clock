@@ -20,6 +20,15 @@
 #endif
 
 extern SettingsManager settings;
+#include "todo_manager.h"
+#include "alarm_manager.h"
+#ifndef NATIVE_TEST
+#include "todo_html.h"
+#include "alarm_html.h"
+#include "audio_player.h"
+#include "time_utils.h"
+#include <SD.h>
+#endif
 
 #if defined(ST7796_DRIVER)
     #define DEVICE_NAME "ESP32-3248S035C"
@@ -68,7 +77,7 @@ void WifiManager::begin() {
     WiFi.setTxPower(WIFI_POWER_11dBm);
 
     _improv = new ImprovWiFi(&Serial);
-    _improv->setDeviceInfo(ImprovTypes::ChipFamily::CF_ESP32, "CYD-Weather-Station", "1.0", "CYD Weather Station", "http://{LOCAL_IPV4}");
+    _improv->setDeviceInfo(ImprovTypes::ChipFamily::CF_ESP32, "CYD-Alarm-Clock", "1.0", "CYD Alarm Clock", "http://{LOCAL_IPV4}");
     
     _improv->setCustomConnectWiFi([](const char *ssid, const char *password) {
         Serial.printf("\n[WiFi] Improv connecting to %s...\n", ssid);
@@ -245,7 +254,7 @@ String WifiManager::getAPSSID() {
     for (size_t i = 0; i < suffix.length(); i++) {
         suffix[i] = toupper(suffix[i]);
     }
-    return "cyd-weather-station-" + suffix;
+    return "cyd-alarm-clock-" + suffix;
 }
 
 void WifiManager::startAPMode() {
@@ -342,7 +351,7 @@ void WifiManager::handleRoot() {
     if (scanStatus == WIFI_SCAN_RUNNING || scanStatus == WIFI_SCAN_FAILED) {
         html += "<meta http-equiv='refresh' content='3'>";
     }
-    html += "<title>CYD Weather Station Setup</title>";
+    html += "<title>CYD Alarm Clock Setup</title>";
     html += "<style>";
     html += "body { font-family: 'Inter', system-ui, sans-serif; background: #1e1e2e; color: #cdd6f4; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; box-sizing: border-box; }";
     html += ".card { background: #181825; border-radius: 12px; padding: 30px; width: 100%; max-width: 400px; box-shadow: 0 8px 30px rgba(0,0,0,0.3); border: 1px solid #313244; }";
@@ -393,7 +402,7 @@ void WifiManager::handleRoot() {
     html += "</script>";
     html += "</head><body>";
     html += "<div class='card'>";
-    html += "<h2 style=\"margin-bottom: 5px;\">CYD Weather Station</h2>";
+    html += "<h2 style=\"margin-bottom: 5px;\">CYD Alarm Clock</h2>";
 #ifdef APP_VERSION
     html += "<p style=\"text-align: center; color: #a6adc8; margin-top: 0; margin-bottom: 20px; font-size: 14px;\">Version " + String(APP_VERSION) + "</p>";
 #else
@@ -540,7 +549,7 @@ void WifiManager::startWebServer() {
         settings.factoryReset();
         WiFi.disconnect(true, true);
         String html = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">";
-        html += "<title>CYD Weather Station</title>";
+        html += "<title>CYD Alarm Clock</title>";
         html += "<style>body { font-family: 'Inter', sans-serif; background: #1e1e2e; color: #cdd6f4; text-align: center; padding: 50px; }</style>";
         html += "<meta http-equiv=\"refresh\" content=\"5;url=/\">";
         html += "</head><body><h2 style='color: #f5c2e7;'>Factory Reset Complete</h2><p>The device is restarting in AP Setup mode...</p></body></html>";
@@ -627,6 +636,41 @@ void WifiManager::startWebServer() {
     _webServer->on("/screenshot", [this]() { handleScreenshot(); });
     _webServer->on("/settings", HTTP_GET, [this]() { handleSettings(); });
     _webServer->on("/settings/save", HTTP_POST, [this]() { handleSettingsSave(); });
+    _webServer->on("/todo", HTTP_GET, [this]() { handleTodo(); });
+    _webServer->on("/alarm", HTTP_GET, [this]() { handleAlarm(); });
+    _webServer->on("/api/alarm", HTTP_GET, [this]() {
+        struct tm now; bool have = getLocalTimeWrapper(&now, 0);
+        _webServer->send(200, "application/json", alarmClock.toJson(have ? &now : nullptr, settings.getUse24HourFormat()));
+    });
+    _webServer->on("/api/alarm", HTTP_POST, [this]() {
+        if (!_webServer->hasArg("plain")) { _webServer->send(400, "text/plain", "Body not received"); return; }
+        struct tm now; bool have = getLocalTimeWrapper(&now, 0);
+        if (!alarmClock.applyJson(_webServer->arg("plain"), have ? &now : nullptr)) { _webServer->send(400, "text/plain", "Bad alarm JSON"); return; }
+        alarmClock.save();
+        _webServer->send(200, "application/json", alarmClock.toJson(have ? &now : nullptr, settings.getUse24HourFormat()));
+    });
+    _webServer->on("/api/alarm/test", HTTP_POST, [this]() {
+        String song = alarmClock.cfg().song; int vol = alarmClock.cfg().volume;
+        if (_webServer->hasArg("plain")) { DynamicJsonDocument d(256); if (!deserializeJson(d, _webServer->arg("plain"))) { if (d.containsKey("song")) song = String(d["song"].as<const char*>()); if (d.containsKey("volume")) vol = d["volume"].as<int>(); } }
+        audio.setVolume(vol);
+        bool file = audio.playFile(String(AudioPlayer::musicDir()) + "/" + song, false);
+        if (!file) audio.playBuiltin(false);
+        _webServer->send(200, "text/plain", file ? "Playing " + song : "File not on the card: playing the built-in tune");
+    });
+    _webServer->on("/api/alarm/stop", HTTP_POST, [this]() { audio.stop(); _webServer->send(200, "text/plain", "Stopped"); });
+    _webServer->on("/api/music", HTTP_GET, [this]() { _webServer->send(200, "application/json", AudioPlayer::musicList()); });
+    _webServer->on("/api/music/upload", HTTP_POST, [this]() {
+        _webServer->send(_uploadFile ? 500 : 200, "text/plain", _uploadFile ? "Upload did not finish" : "OK");
+    }, [this]() { handleMusicUpload(); });
+    _webServer->on("/api/todo", HTTP_GET, [this]() {
+        _webServer->send(200, "application/json", todo.toJson());
+    });
+    _webServer->on("/api/todo", HTTP_POST, [this]() {
+        if (!_webServer->hasArg("plain")) { _webServer->send(400, "text/plain", "Body not received"); return; }
+        if (!todo.fromJson(_webServer->arg("plain"))) { _webServer->send(400, "text/plain", "Expected {\"items\":[{\"text\":\"...\",\"done\":false}]}"); return; }
+        todo.save();
+        _webServer->send(200, "application/json", todo.toJson());
+    });
     _webServer->on("/api/config", HTTP_GET, [this]() {
         if (!settings.getApiServerEnabled()) {
             _webServer->send(403, "text/plain", "Forbidden: API server disabled in settings");
@@ -1070,6 +1114,34 @@ void WifiManager::handleSettingsSave() {
     _webServer->send(200, "text/html", html);
     delay(2000);
     ESP.restart();
+}
+
+void WifiManager::handleAlarm() {
+    String html = alarm_html;
+    _webServer->send(200, "text/html", html);
+}
+
+void WifiManager::handleMusicUpload() {
+    HTTPUpload& up = _webServer->upload();
+    if (up.status == UPLOAD_FILE_START) {
+        if (!SdCardManager::isMounted()) SdCardManager::begin();
+        if (!SdCardManager::isMounted()) { Serial.println("[music] upload refused: no SD card"); return; }
+        String name = up.filename; int slash = name.lastIndexOf('/'); if (slash >= 0) name = name.substring(slash + 1);
+        if (!SD.exists(AudioPlayer::musicDir())) SD.mkdir(AudioPlayer::musicDir());
+        audio.stop();
+        _uploadFile = SD.open(String(AudioPlayer::musicDir()) + "/" + name, FILE_WRITE);
+        Serial.printf("[music] upload %s -> %s\n", name.c_str(), _uploadFile ? "open" : "FAILED");
+    } else if (up.status == UPLOAD_FILE_WRITE) {
+        if (_uploadFile) _uploadFile.write(up.buf, up.currentSize);
+    } else if (up.status == UPLOAD_FILE_END || up.status == UPLOAD_FILE_ABORTED) {
+        if (_uploadFile) { _uploadFile.close(); _uploadFile = fs::File(); }
+        Serial.printf("[music] upload %s, %u bytes\n", up.status == UPLOAD_FILE_END ? "done" : "aborted", (unsigned)up.totalSize);
+    }
+}
+
+void WifiManager::handleTodo() {
+    String html = todo_html;
+    _webServer->send(200, "text/html", html);
 }
 
 void WifiManager::handleLanding() {

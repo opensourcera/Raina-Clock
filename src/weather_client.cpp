@@ -98,7 +98,7 @@ bool WeatherClient::reverseGeocode() {
     Serial.print(_latitude); Serial.print(", "); Serial.println(_longitude);
 
     if (http.begin(client, url)) {
-        http.addHeader("User-Agent", "CYD-Weather-Station/1.0");
+        http.addHeader("User-Agent", "CYD-Alarm-Clock/1.0");
         int httpCode = http.GET();
         if (httpCode == HTTP_CODE_OK) {
             String payload = http.getString();

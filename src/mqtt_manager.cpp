@@ -119,7 +119,7 @@ void MqttManager::publishHADiscovery() {
     String mac = WiFi.macAddress();
     mac.replace(":", "");
     String deviceId = "cyd_weather_" + mac;
-    String deviceJson = "\"device\":{\"identifiers\":[\"" + deviceId + "\"],\"name\":\"CYD Weather Station " + mac.substring(mac.length() - 4) + "\",\"manufacturer\":\"Nicholas Wilde\",\"model\":\"CYD-28R/35C\"}";
+    String deviceJson = "\"device\":{\"identifiers\":[\"" + deviceId + "\"],\"name\":\"CYD Alarm Clock " + mac.substring(mac.length() - 4) + "\",\"manufacturer\":\"Nicholas Wilde\",\"model\":\"CYD-28R/35C\"}";
 
     // Temperature
     String tempPayload = "{\"name\":\"Temperature\",\"state_topic\":\"" + _baseTopic + "weather/temperature\",\"unit_of_measurement\":\"°F\",\"device_class\":\"temperature\",\"unique_id\":\"" + deviceId + "_temp\"," + deviceJson + "}";

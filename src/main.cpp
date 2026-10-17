@@ -1,3 +1,9 @@
+#include "todo_manager.h"
+#include "ui_todo.h"
+#include "alarm_manager.h"
+#include "audio_player.h"
+#include "ui_alarm.h"
+#include "time_utils.h"
 #include <Arduino.h>
 #include <WiFi.h>
 #include "display.h"
@@ -78,7 +84,7 @@ void onWiFiDisconnect(WiFiEvent_t event, WiFiEventInfo_t info) {
 
 void setup() {
     Serial.begin(115200);
-    Serial.println("[System] Booting ESP32 CYD Weather Station...");
+    Serial.println("[System] Booting ESP32 CYD Alarm Clock...");
 
     dht22.begin();
     dht11.begin();
@@ -109,10 +115,13 @@ void setup() {
 
     // Load saved preferences
     settings.begin();
+    todo.begin();
+    alarmClock.begin();
     screensaver.setTimeoutMs(settings.getScreensaverTimeout());
 
     // Check if SD card is present by attempting a begin/mount
     bool sdPresent = SdCardManager::begin();
+    audio.begin();
     if (sdPresent && !settings.getSdLoggingEnabled()) {
         SdCardManager::end();
     }
@@ -269,6 +278,16 @@ void loop() {
     if (pending_ui_sync) {
         pending_ui_sync = false;
         ui_sync_toggles();
+    }
+    if (todo.consumeChanged()) refreshTodoTab();   // edits from the web page
+    if (alarmClock.consumeChanged()) refreshAlarmUI();
+    {
+        static unsigned long lastAlarmCheck = 0;
+        if (millis() - lastAlarmCheck >= 1000) {
+            lastAlarmCheck = millis();
+            struct tm ti;
+            if (getLocalTimeWrapper(&ti, 0) && alarmClock.isDue(ti)) startAlarmRinging();
+        }
     }
 
     // Periodically call LVGL task handler
