@@ -10,7 +10,7 @@
 extern SettingsManager settings;
 extern ScreenSaverManager screensaver;
 int getCurrentThemeFlavor();
-LV_FONT_DECLARE(font_bitcount_64);
+LV_FONT_DECLARE(font_bitcount_56);
 
 static lv_obj_t* alarm_label = nullptr;
 static lv_obj_t* ring_overlay = nullptr;
@@ -228,7 +228,7 @@ void showAlarmRinging() {
     lv_obj_clear_flag(ring_overlay, LV_OBJ_FLAG_SCROLLABLE);
 
     ring_time = lv_label_create(ring_overlay);
-    lv_obj_set_style_text_font(ring_time, &font_bitcount_64, LV_PART_MAIN);
+    lv_obj_set_style_text_font(ring_time, &font_bitcount_56, LV_PART_MAIN);
     lv_obj_set_style_text_color(ring_time, lv_color_hex(0xf9e2af), LV_PART_MAIN);
     lv_label_set_text(ring_time, "--:--");
     lv_obj_align(ring_time, LV_ALIGN_CENTER, 0, -34);

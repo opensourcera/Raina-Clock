@@ -1,14 +1,17 @@
 #include "ui_trip.h"
 #include "ui_alarm.h"
 #include "time_utils.h"
+#include "settings_manager.h"
 #include <math.h>
+
+extern SettingsManager settings;
 
 // The clock tab: a Bitcount Single LED-style time over a slowly turning colour field, with the alarm bar below.
 
 #define TRIP_BLOBS 4
 #define TRIP_PERIOD_MS 70
 
-LV_FONT_DECLARE(font_bitcount_64);
+LV_FONT_DECLARE(font_bitcount_56);
 
 static lv_obj_t* trip_tab = nullptr;
 static lv_obj_t* trip_tabview = nullptr;
@@ -22,6 +25,7 @@ static uint16_t hue = 0;
 static uint32_t last_date_ms = 0;
 static bool trip_large = false;
 static int time_y = -28;
+static char time_text[16] = "";   // what the big label shows now: HH:MM:SS, colons blinking
 
 static lv_color_t hsv(int h, uint8_t s, uint8_t v) {
     h %= 360; if (h < 0) h += 360;
@@ -54,14 +58,28 @@ static void trip_tick(lv_timer_t* t) {
     if (date_lbl) lv_obj_set_style_text_color(date_lbl, hsv(hue + 180, 20, 95), LV_PART_MAIN);
 
     uint32_t now = millis();
+    struct tm ti;
+    bool have_time = getLocalTimeWrapper(&ti, 0);
+    if (have_time && time_lbl) {
+        bool use24 = settings.getUse24HourFormat();
+        int hour = use24 ? ti.tm_hour : (ti.tm_hour % 12 == 0 ? 12 : ti.tm_hour % 12);
+        char colon = ((now / 500) & 1) ? ' ' : ':';   // blinks once a second; same width as a digit in Bitcount
+        char buf[16];
+        lv_snprintf(buf, sizeof(buf), use24 ? "%02d%c%02d%c%02d" : "%2d%c%02d%c%02d", hour, colon, ti.tm_min, colon, ti.tm_sec);
+        if (strcmp(buf, time_text) != 0) {
+            strcpy(time_text, buf);
+            lv_label_set_text(time_lbl, buf);
+            lv_label_set_text(time_shadow, buf);
+        }
+    }
     if (date_lbl && now - last_date_ms > 1000) {
         last_date_ms = now;
-        struct tm ti;
-        if (getLocalTimeWrapper(&ti, 0)) {
+        if (have_time) {
             static const char* days[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
             static const char* months[] = {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
             char buf[48];
-            lv_snprintf(buf, sizeof(buf), "%s, %s %d", days[ti.tm_wday % 7], months[ti.tm_mon % 12], ti.tm_mday);
+            if (settings.getUse24HourFormat()) lv_snprintf(buf, sizeof(buf), "%s, %s %d", days[ti.tm_wday % 7], months[ti.tm_mon % 12], ti.tm_mday);
+            else lv_snprintf(buf, sizeof(buf), "%s  -  %s, %s %d", ti.tm_hour < 12 ? "AM" : "PM", days[ti.tm_wday % 7], months[ti.tm_mon % 12], ti.tm_mday);
             lv_label_set_text(date_lbl, buf);
         }
         static uint8_t minute_tick = 0;
@@ -92,16 +110,16 @@ void createTripTab(lv_obj_t* tab, lv_obj_t* tabview, int tabIndex, bool isLandsc
 
     // The time in Bitcount Single: a dark copy 3 px behind gives it depth
     time_shadow = lv_label_create(tab);
-    lv_obj_set_style_text_font(time_shadow, &font_bitcount_64, LV_PART_MAIN);
+    lv_obj_set_style_text_font(time_shadow, &font_bitcount_56, LV_PART_MAIN);
     lv_obj_set_style_text_color(time_shadow, lv_color_black(), LV_PART_MAIN);
     lv_obj_set_style_text_opa(time_shadow, 130, LV_PART_MAIN);
-    lv_label_set_text(time_shadow, "--:--");
+    lv_label_set_text(time_shadow, "--:--:--");
     lv_obj_align(time_shadow, LV_ALIGN_CENTER, 3, time_y + 3);
 
     time_lbl = lv_label_create(tab);
-    lv_obj_set_style_text_font(time_lbl, &font_bitcount_64, LV_PART_MAIN);
+    lv_obj_set_style_text_font(time_lbl, &font_bitcount_56, LV_PART_MAIN);
     lv_obj_set_style_text_color(time_lbl, lv_color_white(), LV_PART_MAIN);
-    lv_label_set_text(time_lbl, "--:--");
+    lv_label_set_text(time_lbl, "--:--:--");
     lv_obj_align(time_lbl, LV_ALIGN_CENTER, 0, time_y);
 
     date_lbl = lv_label_create(tab);
@@ -118,11 +136,5 @@ void createTripTab(lv_obj_t* tab, lv_obj_t* tabview, int tabIndex, bool isLandsc
 
 void tripSetTime(const char* time_str) {
     if (time_str == nullptr) return;
-    if (time_lbl) {
-        lv_label_set_text(time_lbl, time_str);
-        lv_label_set_text(time_shadow, time_str);
-        lv_obj_align(time_shadow, LV_ALIGN_CENTER, 3, time_y + 3);
-        lv_obj_align(time_lbl, LV_ALIGN_CENTER, 0, time_y);
-    }
-    alarmRingingSetTime(time_str);
+    alarmRingingSetTime(time_str);   // the big label keeps its own seconds in trip_tick()
 }
