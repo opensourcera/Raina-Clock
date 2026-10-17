@@ -12,6 +12,13 @@
 
 AudioPlayer audio;
 
+// GPIO 4 is the RGB LED's red channel (PWM, active low) and, as in the SleepCYD firmware on this board family, the
+// speaker amplifier's enable (LOW = on). While playing, take the pin away from the LED and hold it low.
+#define AMP_EN_PIN 4
+#define LED_RED_CHANNEL 5
+static void ampOn()  { ledcDetachPin(AMP_EN_PIN); pinMode(AMP_EN_PIN, OUTPUT); digitalWrite(AMP_EN_PIN, LOW); }
+static void ampOff() { pinMode(AMP_EN_PIN, OUTPUT); digitalWrite(AMP_EN_PIN, HIGH); ledcAttachPin(AMP_EN_PIN, LED_RED_CHANNEL); ledcWrite(LED_RED_CHANNEL, 255); }
+
 // The opening of Fuer Elise as a ringtone, for when there is no SD card or no file
 static const char fur_elise_rtttl[] PROGMEM =
     "FurElise:d=8,o=5,b=125:e6,d#6,e6,d#6,e6,b,d6,c6,4a,p,c,e,a,4b,p,e,g#,b,4c6,p,e,"
@@ -99,13 +106,15 @@ bool AudioPlayer::startCurrent() {
         if (!((AudioGeneratorRTTTL*)_gen)->begin((AudioFileSource*)_src, out)) { teardown(); return false; }
     } else {
         AudioFileSourceSD* src = new AudioFileSourceSD(_curPath.c_str());
-        if (!src->isOpen()) { delete src; _curBuiltin = true; return startCurrent(); }   // fall back to the tune
+        if (!src->isOpen()) { Serial.println(String("[audio] cannot open ") + _curPath + ", using the built-in tune"); delete src; _curBuiltin = true; return startCurrent(); }   // fall back to the tune
         _src = src;
         _gen = new AudioGeneratorMP3();
-        if (!((AudioGeneratorMP3*)_gen)->begin(src, out)) { teardown(); return false; }
+        if (!((AudioGeneratorMP3*)_gen)->begin(src, out)) { Serial.println("[audio] the MP3 decoder refused the file"); teardown(); return false; }
     }
     i2s_set_dac_mode(I2S_DAC_CHANNEL_LEFT_EN);   // GPIO 26 only; GPIO 25 stays a digital pin for the touch panel
+    ampOn();
     _running = true;
+    Serial.println(String("[audio] playing ") + (_curBuiltin ? String("built-in tune") : _curPath) + " at volume " + _volume);
     return true;
 }
 
@@ -120,6 +129,7 @@ void AudioPlayer::teardown() {
         _src = nullptr;
     }
     if (_out) ((AudioOutputI2S*)_out)->stop();
+    if (_running) ampOff();
     _running = false;
 }
 

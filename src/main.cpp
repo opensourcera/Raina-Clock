@@ -128,9 +128,7 @@ void setup() {
     }
 
     // Initialize hardware display and touch drivers
-    Serial.println("[boot] display and touch...");
     initDisplayAndTouch();
-    Serial.println("[boot] display ok");
 
     backlight.begin();
     if (!settings.getAutoBrightness()) {
@@ -139,12 +137,9 @@ void setup() {
 
     // Initialize LVGL UI framework
     initLVGL();
-    Serial.println("[boot] lvgl ok");
 
     // Initialize UI layouts
-    Serial.println("[boot] building the UI...");
     initUI();
-    Serial.println("[boot] UI built");
     screensaver.begin();
 
     // Load offline cache on boot if available

@@ -115,7 +115,7 @@ String AlarmManager::toJson(const struct tm* now, bool use24h) const {
     doc["song"] = _c.song.c_str();
     doc["ringing"] = _ringing;
     doc["snoozed"] = _snoozeKey >= 0;
-    if (now) doc["next"] = nextText(*now, use24h).c_str();
+    if (now) doc["next"] = nextText(*now, use24h);   // a String is copied; .c_str() of a temporary would dangle
     std::string out;
     serializeJson(doc, out);
     return String(out.c_str());
