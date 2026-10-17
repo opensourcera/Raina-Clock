@@ -18,6 +18,7 @@ static std::vector<String> found;        // SSIDs of the last scan, same order a
 static std::vector<bool> found_open;
 static String chosen;
 static bool large = false;
+static bool zip_only = false;            // opened from the Settings tab: Close returns to the clock, not to the network list
 static int kb_page = 0;                  // 0 lower, 1 upper, 2 numbers, 3 symbols
 
 static const lv_font_t* font() { return large ? &lv_font_montserrat_20 : &lv_font_montserrat_14; }
@@ -28,6 +29,7 @@ static void pageZip();
 
 static void closeAll() {
     wifi_scan_hold = false;
+    WiFi.setAutoReconnect(true);
     if (scan_timer) { lv_timer_del(scan_timer); scan_timer = nullptr; }
     if (overlay) { lv_obj_del(overlay); overlay = nullptr; }
     list = status_lbl = ta = kb = nullptr;
@@ -134,6 +136,11 @@ static void startScan() {
     lv_refr_now(NULL);                       // show "Scanning..." before the radio blocks us for a few seconds
     wifi_scan_hold = true;                   // no connection attempts while we scan
     if (WiFi.getMode() == WIFI_OFF) WiFi.mode(WIFI_STA);
+    if (WiFi.status() != WL_CONNECTED) {      // a connection attempt in progress makes every scan fail (-2)
+        WiFi.setAutoReconnect(false);
+        WiFi.disconnect(false, false);
+        delay(250);
+    }
     int n = 0;
     for (int attempt = 1; attempt <= 3; attempt++) {
         WiFi.scanDelete();
@@ -289,12 +296,12 @@ static void pageZip() {
     int cy = h - ch - gap, bw = (w - 8 - 2 * 3) / 3;
     lv_obj_t* del = button(overlay, LV_SYMBOL_BACKSPACE, [](lv_event_t*) { lv_textarea_del_char(ta); }, 0xfab387, bw, ch);
     lv_obj_set_pos(del, 4, cy);
-    lv_obj_t* cancel = button(overlay, LV_SYMBOL_CLOSE, [](lv_event_t*) { pageList(); }, 0xf38ba8, bw, ch);
+    lv_obj_t* cancel = button(overlay, LV_SYMBOL_CLOSE, [](lv_event_t*) { if (zip_only) closeAll(); else pageList(); }, 0xf38ba8, bw, ch);
     lv_obj_set_pos(cancel, 4 + bw + 3, cy);
     lv_obj_t* ok = button(overlay, LV_SYMBOL_OK, [](lv_event_t*) {
         String zip = String(lv_textarea_get_text(ta));
         if (zip.length() >= 3) { settings.setZipCode(zip); settings.setCityCode(""); }
-        pageList();
+        if (zip_only) closeAll(); else pageList();
     }, 0xa6e3a1, bw, ch);
     lv_obj_set_pos(ok, 4 + 2 * (bw + 3), cy);
 }
@@ -303,6 +310,7 @@ static void pageZip() {
 
 void showWifiSetup() {
     if (overlay) return;
+    zip_only = false;
     large = (lv_disp_get_hor_res(NULL) >= 480 || lv_disp_get_ver_res(NULL) >= 480);
     overlay = lv_obj_create(lv_layer_top());
     lv_obj_set_size(overlay, LV_PCT(100), LV_PCT(100));
@@ -317,6 +325,13 @@ void showWifiSetup() {
 }
 
 bool isWifiSetupShown() { return overlay != nullptr; }
+
+void showZipSetup() {
+    if (overlay) return;
+    showWifiSetup();          // builds the overlay and starts on the network list (which scans)
+    zip_only = true;
+    pageZip();
+}
 
 void refreshWifiSettingsButton() {
     if (!settings_btn_lbl) return;
@@ -340,5 +355,23 @@ lv_obj_t* createWifiSettingsButton(lv_obj_t* parent, bool isLargeScreen) {
     lv_obj_center(settings_btn_lbl);
     lv_obj_add_event_cb(b, [](lv_event_t*) { showWifiSetup(); }, LV_EVENT_CLICKED, nullptr);
     refreshWifiSettingsButton();
+    return b;
+}
+
+lv_obj_t* createZipSettingsButton(lv_obj_t* parent, bool isLargeScreen) {
+    large = isLargeScreen;
+    lv_obj_t* b = lv_btn_create(parent);
+    lv_obj_set_size(b, lv_pct(100), isLargeScreen ? 44 : 34);
+    lv_obj_set_style_bg_color(b, lv_color_hex(0xf9e2af), LV_PART_MAIN);
+    lv_obj_set_style_radius(b, 8, LV_PART_MAIN);
+    lv_obj_set_style_shadow_width(b, 0, LV_PART_MAIN);
+    lv_obj_t* l = lv_label_create(b);
+    char buf[48];
+    snprintf(buf, sizeof(buf), LV_SYMBOL_GPS "  Zip %s", settings.getZipCode().length() ? settings.getZipCode().c_str() : "not set");
+    lv_label_set_text(l, buf);
+    lv_obj_set_style_text_font(l, font(), LV_PART_MAIN);
+    lv_obj_set_style_text_color(l, lv_color_hex(0x11111b), LV_PART_MAIN);
+    lv_obj_center(l);
+    lv_obj_add_event_cb(b, [](lv_event_t*) { showZipSetup(); }, LV_EVENT_CLICKED, nullptr);
     return b;
 }
