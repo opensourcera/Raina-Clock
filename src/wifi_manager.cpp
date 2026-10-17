@@ -818,6 +818,12 @@ void WifiManager::startWebServer() {
             _webServer->send(400, "text/plain", "Missing index parameter");
         }
     });
+    _webServer->on("/api/settings_tab", [this]() {
+        if (!settings.getApiServerEnabled()) { _webServer->send(403, "text/plain", "Forbidden: API server disabled in settings"); return; }
+        if (!_webServer->hasArg("index")) { _webServer->send(400, "text/plain", "Missing index parameter"); return; }
+        setUISettingsTab(_webServer->arg("index").toInt());
+        _webServer->send(200, "text/plain", "Settings tab updated");
+    });
     _webServer->on("/api/orientation", [this]() {
         if (!settings.getApiServerEnabled()) {
             _webServer->send(403, "text/plain", "Forbidden: API server disabled in settings");

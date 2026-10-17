@@ -2,6 +2,7 @@
 #include "ui_todo.h"
 #include "ui_trip.h"
 #include "ui_wifi.h"
+#include "ui_alarm.h"
 #include <Arduino.h>
 #include "config/config.h"
 #include "settings_manager.h"
@@ -143,6 +144,7 @@ static lv_obj_t *footer_label;
 static lv_obj_t *local_sensor_cnt = nullptr;
 static lv_obj_t *local_sensor_lbl = nullptr;
 static lv_obj_t *tabview_obj = nullptr;
+static lv_obj_t *settings_tabs_obj = nullptr;   // the tab bar inside Setup
 
 // Forecast widgets
 static lv_obj_t *fore_day_label[3];
@@ -387,6 +389,55 @@ static void unit_sw_event_cb(lv_event_t * e) {
     settings_unit_changed = true;
 }
 
+// ---- Big radio choices for Theme, Units and Orientation (cyd-alarm-clock): the whole chip is the touch target
+static void radio_click_cb(lv_event_t * e) {
+    lv_obj_t * me = lv_event_get_target(e);
+    intptr_t tag = (intptr_t)lv_obj_get_user_data(me);       // group * 16 + index
+    int group = (int)(tag >> 4), idx = (int)(tag & 15);
+    lv_obj_t * parent = lv_obj_get_parent(me);
+    for (uint32_t i = 0; i < lv_obj_get_child_cnt(parent); i++) {
+        lv_obj_t * c = lv_obj_get_child(parent, i);
+        if (!lv_obj_check_type(c, &lv_checkbox_class) || (int)((intptr_t)lv_obj_get_user_data(c) >> 4) != group) continue;
+        if (c == me) lv_obj_add_state(c, LV_STATE_CHECKED); else lv_obj_clear_state(c, LV_STATE_CHECKED);
+    }
+    if (group == 1) {                                   // theme: Mocha, Macchiato, Frappe, Latte
+        if (idx + 1 != settings.getThemeFlavor()) { settings.setThemeFlavor(idx + 1); settings_theme_changed = true; }
+    } else if (group == 2) {                            // units: Fahrenheit, Celsius
+        settings.setUnitSystem(idx == 0 ? UNIT_IMPERIAL : UNIT_METRIC);
+        settings_unit_changed = true;
+    } else if (group == 3) {                            // orientation, in the order of the old dropdown
+        settings.setScreenOrientation(dropdown_to_rotation[idx & 3]);
+        settings_orientation_changed = true;
+    }
+}
+
+static lv_obj_t * make_radio(lv_obj_t * parent, const char * text, int group, int idx, bool checked, bool big) {
+    const auto & f = getCatppuccinFlavor(getCurrentThemeFlavor());
+    lv_obj_t * cb = lv_checkbox_create(parent);
+    lv_checkbox_set_text(cb, text);
+    lv_obj_set_size(cb, lv_pct(48), big ? 46 : 31);
+    lv_obj_set_style_text_font(cb, big ? &lv_font_montserrat_20 : &lv_font_montserrat_14, LV_PART_MAIN);
+    lv_obj_set_style_text_color(cb, TO_LV_COLOR(f.text), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(cb, TO_LV_COLOR(f.crust), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(cb, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_radius(cb, 8, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(cb, 4, LV_PART_MAIN);
+    lv_obj_set_style_pad_left(cb, 8, LV_PART_MAIN);
+    lv_obj_set_style_pad_column(cb, 8, LV_PART_MAIN);
+    lv_obj_set_style_radius(cb, LV_RADIUS_CIRCLE, LV_PART_INDICATOR);
+    lv_obj_set_style_border_width(cb, 2, LV_PART_INDICATOR);
+    lv_obj_set_style_border_color(cb, TO_LV_COLOR(f.overlay0), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(cb, TO_LV_COLOR(f.base), LV_PART_INDICATOR);
+    lv_obj_set_style_pad_all(cb, big ? 4 : 2, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(cb, TO_LV_COLOR(f.peach), LV_PART_INDICATOR | LV_STATE_CHECKED);
+    lv_obj_set_style_border_color(cb, TO_LV_COLOR(f.peach), LV_PART_INDICATOR | LV_STATE_CHECKED);
+    lv_obj_set_style_text_color(cb, TO_LV_COLOR(f.peach), LV_PART_MAIN | LV_STATE_CHECKED);
+    lv_obj_set_user_data(cb, (void *)(intptr_t)(group * 16 + idx));
+    if (checked) lv_obj_add_state(cb, LV_STATE_CHECKED);
+    lv_obj_add_event_cb(cb, radio_click_cb, LV_EVENT_CLICKED, NULL);
+    return cb;
+}
+
 static void title_ver_sw_event_cb(lv_event_t * e) {
     lv_obj_t * sw = lv_event_get_target(e);
     bool is_checked = lv_obj_has_state(sw, LV_STATE_CHECKED);
@@ -599,7 +650,7 @@ void initUI() {
     lv_obj_t * tab_fore = lv_tabview_add_tab(tabview, isLandscape ? "Days" : "Day");
     lv_obj_t * tab_hourly = lv_tabview_add_tab(tabview, isLandscape ? "Hours" : "Hr");
     lv_obj_t * tab_todo = lv_tabview_add_tab(tabview, isLandscape ? "To-do" : "Todo");
-    lv_obj_t * tab_trip = lv_tabview_add_tab(tabview, "Trip");
+    lv_obj_t * tab_trip = lv_tabview_add_tab(tabview, "Clock");
     lv_obj_t * tab_settings = lv_tabview_add_tab(tabview, isLandscape ? "Setup" : "Set");
 
     // Set base color & padding on tabs
@@ -992,9 +1043,10 @@ void initUI() {
     lv_obj_set_style_pad_gap(right_col, isLandscape ? 4 : 8, LV_PART_MAIN);
     lv_obj_clear_flag(right_col, LV_OBJ_FLAG_SCROLLABLE);
 
-    // --- Settings split into four tabs (cyd-alarm-clock): Net, Look, Light, More; no long scrolling list.
+    // --- Settings in seven short tabs (cyd-alarm-clock): Net, Look, Disp, Light, Night, Data, Sens. No long list.
     // The upstream code keeps building rows into left_col / right_col; flush_settings() moves everything built so
-    // far into the page chosen for that section, and the next section's page is announced by the next call.
+    // far into the page chosen for that section; the next call announces the page of the next section.
+    // Page -1 is a hidden holder for the upstream dropdowns and switch that the radio buttons replace.
     lv_obj_t * set_tabs = lv_tabview_create(tab_settings, LV_DIR_TOP, isLargeScreen ? 40 : 30);
     lv_obj_set_size(set_tabs, lv_pct(100), lv_pct(100));
     lv_obj_align(set_tabs, LV_ALIGN_TOP_LEFT, 0, 0);
@@ -1009,25 +1061,47 @@ void initUI() {
         lv_obj_set_style_text_color(sb, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).peach), LV_PART_ITEMS | LV_STATE_CHECKED);
         lv_obj_set_style_bg_color(sb, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).base), LV_PART_ITEMS | LV_STATE_CHECKED);
         lv_obj_set_style_text_font(sb, isLargeScreen ? &lv_font_montserrat_20 : &lv_font_montserrat_14, LV_PART_ITEMS);
+        lv_obj_set_style_pad_left(sb, 0, LV_PART_ITEMS);
+        lv_obj_set_style_pad_right(sb, 0, LV_PART_ITEMS);
     }
-    const char * set_names[4] = {"Net", "Look", "Light", "More"};
-    lv_obj_t * set_pg[4];
-    for (int i = 0; i < 4; i++) {
+    const char * set_names[7] = {"Net", "Look", "Disp", "Light", "Night", "Data", "Sens"};
+    lv_obj_t * set_pg[7];
+    for (int i = 0; i < 7; i++) {
         set_pg[i] = lv_tabview_add_tab(set_tabs, set_names[i]);
         lv_obj_set_style_bg_color(set_pg[i], TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).base), LV_PART_MAIN);
         lv_obj_set_style_pad_all(set_pg[i], 4, LV_PART_MAIN);
-        lv_obj_set_style_pad_gap(set_pg[i], 6, LV_PART_MAIN);
-        lv_obj_set_flex_flow(set_pg[i], i == 3 ? LV_FLEX_FLOW_COLUMN : LV_FLEX_FLOW_ROW_WRAP);
-        lv_obj_set_scrollbar_mode(set_pg[i], i == 3 ? LV_SCROLLBAR_MODE_AUTO : LV_SCROLLBAR_MODE_OFF);
+        lv_obj_set_style_pad_gap(set_pg[i], 4, LV_PART_MAIN);
+        lv_obj_set_flex_flow(set_pg[i], i == 6 ? LV_FLEX_FLOW_COLUMN : LV_FLEX_FLOW_ROW_WRAP);
+        lv_obj_set_scrollbar_mode(set_pg[i], i == 6 ? LV_SCROLLBAR_MODE_AUTO : LV_SCROLLBAR_MODE_OFF);
     }
+    settings_tabs_obj = set_tabs;
+    lv_obj_t * set_junk = lv_obj_create(tab_settings);
+    lv_obj_add_flag(set_junk, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_size(set_junk, 1, 1);
+
+    // The radio choices go in first, so they lead their pages
+    {
+        const char * themes[4] = {"Mocha", "Macchiato", "Frappe", "Latte"};
+        for (int i = 0; i < 4; i++) make_radio(set_pg[1], themes[i], 1, i, settings.getThemeFlavor() == i + 1, isLargeScreen);
+        make_radio(set_pg[1], "Fahrenheit", 2, 0, settings.getUnitSystem() == UNIT_IMPERIAL, isLargeScreen);
+        make_radio(set_pg[1], "Celsius", 2, 1, settings.getUnitSystem() != UNIT_IMPERIAL, isLargeScreen);
+        const char * orients[4] = {"Landscape", "Portrait", "Land. flip", "Port. flip"};
+        int cur_rot = settings.getScreenOrientation();
+        int cur_idx = (cur_rot >= 0 && cur_rot < 4) ? rotation_to_dropdown[cur_rot] : 0;
+        for (int i = 0; i < 4; i++) make_radio(set_pg[2], orients[i], 3, i, cur_idx == i, isLargeScreen);
+    }
+
     int set_cur_page = 0;
     auto flush_settings = [&](int next_page) {
         lv_obj_t * cols[2] = {left_col, right_col};
         for (int c = 0; c < 2; c++) {
             while (lv_obj_get_child_cnt(cols[c]) > 0) {
                 lv_obj_t * ch = lv_obj_get_child(cols[c], 0);
+                if (set_cur_page < 0) { lv_obj_set_parent(ch, set_junk); continue; }
                 lv_obj_set_parent(ch, set_pg[set_cur_page]);
-                if (set_cur_page != 3) lv_obj_set_width(ch, lv_pct(48));   // two items per row
+                bool plain = lv_obj_check_type(ch, &lv_slider_class) || lv_obj_check_type(ch, &lv_label_class);
+                bool full = set_cur_page == 4 || set_cur_page == 6 || (set_cur_page == 3 && plain);
+                lv_obj_set_width(ch, lv_pct(full ? 100 : 48));   // two switches per row, sliders and their labels full width
             }
         }
         set_cur_page = next_page;
@@ -1039,8 +1113,9 @@ void initUI() {
     flush_settings(0);
     createWifiSettingsButton(left_col, isLargeScreen);
     createZipSettingsButton(left_col, isLargeScreen);
+    createAlarmTestControls(left_col, isLargeScreen);   // Test sound start/stop and the alarm volume
 
-    flush_settings(1);
+    flush_settings(-1);
     // Unit (C/F) row
     lv_obj_t * unit_row = lv_obj_create(left_col);
     lv_obj_clear_flag(unit_row, LV_OBJ_FLAG_CLICKABLE);
@@ -1070,7 +1145,7 @@ void initUI() {
     }
     lv_obj_add_event_cb(unit_sw, unit_sw_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
-    flush_settings(3);
+    flush_settings(2);
     // Title & Version row
     lv_obj_t * title_ver_row = lv_obj_create(left_col);
     lv_obj_clear_flag(title_ver_row, LV_OBJ_FLAG_CLICKABLE);
@@ -1097,7 +1172,7 @@ void initUI() {
     }
     lv_obj_add_event_cb(ui_title_ver_sw, title_ver_sw_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
-    flush_settings(2);
+    flush_settings(3);
     // Auto Light row
     lv_obj_t * auto_row = lv_obj_create(left_col);
     lv_obj_clear_flag(auto_row, LV_OBJ_FLAG_CLICKABLE);
@@ -1116,7 +1191,7 @@ void initUI() {
 
 
 
-    flush_settings(3);
+    flush_settings(5);
     // SD Log row
     lv_obj_t * sd_row = lv_obj_create(left_col);
     lv_obj_clear_flag(sd_row, LV_OBJ_FLAG_CLICKABLE);
@@ -1147,7 +1222,7 @@ void initUI() {
         lv_obj_add_state(ui_sd_log_sw, LV_STATE_DISABLED);
     }
 
-    flush_settings(3);
+    flush_settings(5);
     // SD Cache row
     lv_obj_t * sd_cache_row = lv_obj_create(left_col);
     lv_obj_clear_flag(sd_cache_row, LV_OBJ_FLAG_CLICKABLE);
@@ -1178,7 +1253,7 @@ void initUI() {
         lv_obj_add_state(ui_sd_cache_sw, LV_STATE_DISABLED);
     }
 
-    flush_settings(3);
+    flush_settings(5);
     // Screenshot Server row
     lv_obj_t * scr_row = lv_obj_create(left_col);
     lv_obj_clear_flag(scr_row, LV_OBJ_FLAG_CLICKABLE);
@@ -1205,7 +1280,7 @@ void initUI() {
     }
     lv_obj_add_event_cb(scr_sw, screenshot_sw_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
-    flush_settings(3);
+    flush_settings(6);
     // Local Sensor row
     lv_obj_t * loc_sens_row = lv_obj_create(left_col);
     lv_obj_clear_flag(loc_sens_row, LV_OBJ_FLAG_CLICKABLE);
@@ -1232,7 +1307,7 @@ void initUI() {
     }
     lv_obj_add_event_cb(ui_sw_local_sensor, local_sensor_sw_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
-    flush_settings(2);
+    flush_settings(3);
     // Screensaver row
     lv_obj_t * saver_row = lv_obj_create(left_col);
     lv_obj_clear_flag(saver_row, LV_OBJ_FLAG_CLICKABLE);
@@ -1259,7 +1334,7 @@ void initUI() {
     }
     lv_obj_add_event_cb(ui_screensaver_sw, screensaver_sw_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
-    flush_settings(2);
+    flush_settings(4);
     // Sleep Schedule Row
     lv_obj_t *sleep_row = lv_obj_create(left_col);
     lv_obj_clear_flag(sleep_row, LV_OBJ_FLAG_CLICKABLE);
@@ -1288,7 +1363,7 @@ void initUI() {
     lv_obj_add_event_cb(ui_sleep_sw, sleep_sw_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
 
-    flush_settings(3);
+    flush_settings(5);
     // MQTT row
     lv_obj_t * mqtt_row = lv_obj_create(left_col);
     lv_obj_clear_flag(mqtt_row, LV_OBJ_FLAG_CLICKABLE);
@@ -1317,7 +1392,7 @@ void initUI() {
 
     // --- Right column items ---
 
-    flush_settings(2);
+    flush_settings(3);
     // Brightness label
     lv_obj_t * slider_label = lv_label_create(right_col);
     char slider_buf[32];
@@ -1344,7 +1419,7 @@ void initUI() {
         lv_obj_add_state(ui_brightness_slider, LV_STATE_DISABLED);
     }
 
-    flush_settings(2);
+    flush_settings(4);
     // LED row
     lv_obj_t * led_row = lv_obj_create(left_col);
     lv_obj_clear_flag(led_row, LV_OBJ_FLAG_CLICKABLE);
@@ -1457,7 +1532,7 @@ void initUI() {
     lv_obj_align(tz_plus_lbl, LV_ALIGN_CENTER, 0, 0);
     lv_obj_add_event_cb(tz_plus_btn, tz_btn_event_cb, LV_EVENT_CLICKED, (void*)(intptr_t)1);
 
-    flush_settings(1);
+    flush_settings(2);
     // 24-hour format row
     lv_obj_t * h24_row = lv_obj_create(right_col);
     lv_obj_clear_flag(h24_row, LV_OBJ_FLAG_CLICKABLE);
@@ -1485,7 +1560,7 @@ void initUI() {
     lv_obj_add_event_cb(ui_24h_sw, use_24h_sw_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
 
-    flush_settings(1);
+    flush_settings(-1);
     // Theme selector dropdown
     lv_obj_t * theme_dropdown = lv_dropdown_create(right_col);
     lv_obj_set_size(theme_dropdown, lv_pct(92), 26);
@@ -1505,7 +1580,7 @@ void initUI() {
     lv_obj_set_style_bg_color(dropdown_list, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).blue), LV_PART_SELECTED | LV_STATE_CHECKED);
     lv_obj_set_style_text_color(dropdown_list, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).crust), LV_PART_SELECTED | LV_STATE_CHECKED);
 
-    flush_settings(1);
+    flush_settings(-1);
     // Orientation selector dropdown
     lv_obj_t * orientation_dropdown = lv_dropdown_create(right_col);
     lv_obj_set_size(orientation_dropdown, lv_pct(92), 26);
@@ -1528,7 +1603,7 @@ void initUI() {
     lv_obj_set_style_bg_color(orient_list, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).blue), LV_PART_SELECTED | LV_STATE_CHECKED);
     lv_obj_set_style_text_color(orient_list, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).crust), LV_PART_SELECTED | LV_STATE_CHECKED);
 
-    flush_settings(3);
+    flush_settings(6);
     // Local Sensor Type Dropdown
     ui_dd_local_sensor_type = lv_dropdown_create(right_col);
     lv_obj_set_size(ui_dd_local_sensor_type, lv_pct(92), 26);
@@ -1594,7 +1669,16 @@ void initUI() {
     lv_obj_set_style_bg_color(ui_ta_hum_offset, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).mantle), LV_PART_MAIN);
     lv_obj_set_style_text_color(ui_ta_hum_offset, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).text), LV_PART_MAIN);
 
-    flush_settings(3);
+    flush_settings(6);
+    {   // Light page: the brightness label and slider lead
+        lv_obj_t * lp = set_pg[3];
+        lv_obj_t * lead[4]; int nl = 0;
+        for (uint32_t i = 0; i < lv_obj_get_child_cnt(lp) && nl < 4; i++) {
+            lv_obj_t * ch = lv_obj_get_child(lp, i);
+            if (lv_obj_check_type(ch, &lv_slider_class) || lv_obj_check_type(ch, &lv_label_class)) lead[nl++] = ch;
+        }
+        for (int i = nl - 1; i >= 0; i--) lv_obj_move_to_index(lead[i], 0);
+    }
     // Re-apply offline indicator state if active
     if (is_offline_mode) {
         updateOfflineIndicator(true);
@@ -1863,6 +1947,10 @@ void setUIActiveTab(int index) {
     if (tabview_obj != nullptr && index >= 0 && index < 6) {
         lv_tabview_set_act(tabview_obj, index, LV_ANIM_OFF);
     }
+}
+
+void setUISettingsTab(int index) {
+    if (settings_tabs_obj != nullptr && index >= 0 && index < 7) lv_tabview_set_act(settings_tabs_obj, index, LV_ANIM_OFF);
 }
 
 void setUIOrientation(int rotation) {

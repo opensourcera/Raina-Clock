@@ -30,6 +30,7 @@ void showScreenSaver();
 void hideScreenSaver();
 void updateScreenSaverTime(const char* time_str);
 void setUIActiveTab(int index);
+void setUISettingsTab(int index);   // the Net, Look, Disp, Light, Night, Data, Sens tabs inside Setup
 void setUIOrientation(int rotation);
 const char* getCardinalDirection(int degrees);
 void showUIStatusMessage(const char* message);

@@ -2,139 +2,114 @@
 #include "ui_alarm.h"
 #include "time_utils.h"
 #include "settings_manager.h"
-#include <math.h>
 
 extern SettingsManager settings;
 
-// The clock tab: a Bitcount Single LED-style time over a slowly turning colour field, with the alarm bar below.
+// The clock tab: black background, lilac digits in Bitcount Single, thin weight, packed close so they can be large.
+// Layout: hour, a colon and the minutes in one row with a wide gap around the colon; the seconds on the next line.
+// The colon blinks once a second. The alarm bar sits at the bottom.
 
-#define TRIP_BLOBS 4
-#define TRIP_PERIOD_MS 70
-
+LV_FONT_DECLARE(font_bitcount_thin_116);
+LV_FONT_DECLARE(font_bitcount_thin_56);
 LV_FONT_DECLARE(font_bitcount_56);
 
-static lv_obj_t* trip_tab = nullptr;
-static lv_obj_t* trip_tabview = nullptr;
-static int trip_index = -1;
-static lv_obj_t* blobs[TRIP_BLOBS] = {nullptr};
-static lv_obj_t* time_shadow = nullptr;
-static lv_obj_t* time_lbl = nullptr;
-static lv_obj_t* date_lbl = nullptr;
-static lv_timer_t* trip_timer = nullptr;
-static uint16_t hue = 0;
-static uint32_t last_date_ms = 0;
-static bool trip_large = false;
-static int time_y = -28;
-static char time_text[16] = "";   // what the big label shows now: HH:MM:SS, colons blinking
+static const uint32_t LILAC = 0xC9A9F5;
 
-static lv_color_t hsv(int h, uint8_t s, uint8_t v) {
-    h %= 360; if (h < 0) h += 360;
-    return lv_color_hsv_to_rgb((uint16_t)h, s, v);
+static lv_obj_t* clock_tab = nullptr;
+static lv_obj_t* clock_tabview = nullptr;
+static int clock_index = -1;
+static lv_obj_t* hour_lbl = nullptr;
+static lv_obj_t* colon_lbl = nullptr;
+static lv_obj_t* min_lbl = nullptr;
+static lv_obj_t* sec_lbl = nullptr;
+static lv_timer_t* clock_timer = nullptr;
+static char hour_text[8] = "";
+static char min_text[8] = "";
+static char sec_text[8] = "";
+static bool colon_on = true;
+
+static void clock_tick(lv_timer_t* t) {
+    (void)t;
+    if (clock_tab == nullptr || clock_tabview == nullptr) return;
+    if ((int)lv_tabview_get_tab_act(clock_tabview) != clock_index) return;   // not on screen: nothing to redraw
+
+    struct tm ti;
+    if (!getLocalTimeWrapper(&ti, 0)) return;
+    bool use24 = settings.getUse24HourFormat();
+    int hour = use24 ? ti.tm_hour : (ti.tm_hour % 12 == 0 ? 12 : ti.tm_hour % 12);
+    char hh[8], mm[8], ss[8];
+    lv_snprintf(hh, sizeof(hh), use24 ? "%02d" : "%d", hour);
+    lv_snprintf(mm, sizeof(mm), "%02d", ti.tm_min);
+    lv_snprintf(ss, sizeof(ss), "%02d", ti.tm_sec);
+    if (strcmp(hh, hour_text) != 0) { strcpy(hour_text, hh); lv_label_set_text(hour_lbl, hh); }
+    if (strcmp(mm, min_text) != 0)  { strcpy(min_text, mm);  lv_label_set_text(min_lbl, mm); }
+    if (strcmp(ss, sec_text) != 0)  { strcpy(sec_text, ss);  lv_label_set_text(sec_lbl, ss); }
+    bool on = ((millis() / 500) & 1) == 0;              // the colon is on for half a second, off for half a second
+    if (on != colon_on) { colon_on = on; lv_label_set_text(colon_lbl, on ? ":" : " "); }
+
+    static uint16_t countdown = 399;   // so the first tick with a valid time refreshes the alarm line at once
+    if (++countdown >= 400) { countdown = 0; refreshAlarmUI(); }   // the time-left text in the alarm bar, about every 30 s
 }
 
-static void trip_tick(lv_timer_t* t) {
-    (void)t;
-    if (trip_tab == nullptr || trip_tabview == nullptr) return;
-    if ((int)lv_tabview_get_tab_act(trip_tabview) != trip_index) return;   // not on screen: nothing to animate
-
-    hue = (hue + 2) % 360;
-    lv_obj_set_style_bg_color(trip_tab, hsv(hue, 85, 55), LV_PART_MAIN);
-    lv_obj_set_style_bg_grad_color(trip_tab, hsv(hue + 70, 90, 40), LV_PART_MAIN);
-
-    int w = lv_obj_get_content_width(trip_tab), h = lv_obj_get_content_height(trip_tab);
-    if (w <= 0 || h <= 0) return;
-    float s = millis() / 1000.0f;
-    for (int k = 0; k < TRIP_BLOBS; k++) {
-        if (blobs[k] == nullptr) continue;
-        int size = lv_obj_get_width(blobs[k]);
-        float a = s * (0.35f + 0.13f * k) + k * 1.9f;
-        float b = s * (0.27f + 0.11f * k) + k * 0.7f;
-        int x = (int)((w - size) * (0.5f + 0.5f * sinf(a)));
-        int y = (int)((h - size) * (0.5f + 0.5f * cosf(b)));
-        lv_obj_set_pos(blobs[k], x, y);
-        lv_obj_set_style_bg_color(blobs[k], hsv(hue + 90 * k + 45, 95, 100), LV_PART_MAIN);
-    }
-    if (time_lbl) lv_obj_set_style_text_color(time_lbl, hsv(hue + 180, 20, 100), LV_PART_MAIN);
-    if (date_lbl) lv_obj_set_style_text_color(date_lbl, hsv(hue + 180, 20, 95), LV_PART_MAIN);
-
-    uint32_t now = millis();
-    struct tm ti;
-    bool have_time = getLocalTimeWrapper(&ti, 0);
-    if (have_time && time_lbl) {
-        bool use24 = settings.getUse24HourFormat();
-        int hour = use24 ? ti.tm_hour : (ti.tm_hour % 12 == 0 ? 12 : ti.tm_hour % 12);
-        char colon = ((now / 500) & 1) ? ' ' : ':';   // blinks once a second; same width as a digit in Bitcount
-        char buf[16];
-        lv_snprintf(buf, sizeof(buf), use24 ? "%02d%c%02d%c%02d" : "%2d%c%02d%c%02d", hour, colon, ti.tm_min, colon, ti.tm_sec);
-        if (strcmp(buf, time_text) != 0) {
-            strcpy(time_text, buf);
-            lv_label_set_text(time_lbl, buf);
-            lv_label_set_text(time_shadow, buf);
-        }
-    }
-    if (date_lbl && now - last_date_ms > 1000) {
-        last_date_ms = now;
-        if (have_time) {
-            static const char* days[] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
-            static const char* months[] = {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
-            char buf[48];
-            if (settings.getUse24HourFormat()) lv_snprintf(buf, sizeof(buf), "%s, %s %d", days[ti.tm_wday % 7], months[ti.tm_mon % 12], ti.tm_mday);
-            else lv_snprintf(buf, sizeof(buf), "%s  -  %s, %s %d", ti.tm_hour < 12 ? "AM" : "PM", days[ti.tm_wday % 7], months[ti.tm_mon % 12], ti.tm_mday);
-            lv_label_set_text(date_lbl, buf);
-        }
-        static uint8_t minute_tick = 0;
-        if (++minute_tick >= 30) { minute_tick = 0; refreshAlarmUI(); }   // the countdown in the alarm bar
-    }
+static lv_obj_t* bigLabel(lv_obj_t* parent, const lv_font_t* font, int letter_space, const char* text) {
+    lv_obj_t* l = lv_label_create(parent);
+    lv_obj_set_style_text_font(l, font, LV_PART_MAIN);
+    lv_obj_set_style_text_color(l, lv_color_hex(LILAC), LV_PART_MAIN);
+    lv_obj_set_style_text_letter_space(l, letter_space, LV_PART_MAIN);   // the dots sit inside a wider cell: pack them
+    lv_label_set_text(l, text);
+    return l;
 }
 
 void createTripTab(lv_obj_t* tab, lv_obj_t* tabview, int tabIndex, bool isLandscape, bool isLargeScreen) {
     (void)isLandscape;
-    if (trip_timer) { lv_timer_del(trip_timer); trip_timer = nullptr; }
-    trip_tab = tab; trip_tabview = tabview; trip_index = tabIndex; trip_large = isLargeScreen;
-    time_y = isLargeScreen ? -40 : -28;
+    if (clock_timer) { lv_timer_del(clock_timer); clock_timer = nullptr; }
+    clock_tab = tab; clock_tabview = tabview; clock_index = tabIndex;
+    hour_text[0] = min_text[0] = sec_text[0] = 0;
+    colon_on = true;
 
     lv_obj_set_style_pad_all(tab, 0, LV_PART_MAIN);
-    lv_obj_set_style_bg_grad_dir(tab, LV_GRAD_DIR_VER, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(tab, lv_color_black(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(tab, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_scrollbar_mode(tab, LV_SCROLLBAR_MODE_OFF);
 
-    int blob_size = isLargeScreen ? 150 : 90;
-    for (int k = 0; k < TRIP_BLOBS; k++) {
-        blobs[k] = lv_obj_create(tab);
-        lv_obj_set_size(blobs[k], blob_size, blob_size);
-        lv_obj_set_style_radius(blobs[k], LV_RADIUS_CIRCLE, LV_PART_MAIN);
-        lv_obj_set_style_border_width(blobs[k], 0, LV_PART_MAIN);
-        lv_obj_set_style_bg_opa(blobs[k], 150, LV_PART_MAIN);
-        lv_obj_clear_flag(blobs[k], LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-    }
+    bool wide = lv_disp_get_hor_res(NULL) >= 300;       // portrait (240 px) falls back to the regular 56 px font
+    const lv_font_t* big = wide ? &font_bitcount_thin_116 : &font_bitcount_56;
+    const lv_font_t* small = wide ? &font_bitcount_thin_56 : &font_bitcount_56;
+    int big_space = wide ? -15 : -6;
+    int small_space = wide ? -7 : -4;
 
-    // The time in Bitcount Single: a dark copy 3 px behind gives it depth
-    time_shadow = lv_label_create(tab);
-    lv_obj_set_style_text_font(time_shadow, &font_bitcount_56, LV_PART_MAIN);
-    lv_obj_set_style_text_color(time_shadow, lv_color_black(), LV_PART_MAIN);
-    lv_obj_set_style_text_opa(time_shadow, 130, LV_PART_MAIN);
-    lv_label_set_text(time_shadow, "--:--:--");
-    lv_obj_align(time_shadow, LV_ALIGN_CENTER, 3, time_y + 3);
+    lv_obj_t* stack = lv_obj_create(tab);
+    lv_obj_set_size(stack, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(stack, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(stack, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_bg_opa(stack, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(stack, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(stack, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_row(stack, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(stack, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_align(stack, LV_ALIGN_TOP_MID, 0, 0);
 
-    time_lbl = lv_label_create(tab);
-    lv_obj_set_style_text_font(time_lbl, &font_bitcount_56, LV_PART_MAIN);
-    lv_obj_set_style_text_color(time_lbl, lv_color_white(), LV_PART_MAIN);
-    lv_label_set_text(time_lbl, "--:--:--");
-    lv_obj_align(time_lbl, LV_ALIGN_CENTER, 0, time_y);
+    lv_obj_t* row = lv_obj_create(stack);                // hour : minutes, with a long space around the colon
+    lv_obj_set_size(row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(row, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(row, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_column(row, wide ? 12 : 4, LV_PART_MAIN);
+    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    hour_lbl = bigLabel(row, big, big_space, "--");
+    colon_lbl = bigLabel(row, big, big_space, ":");
+    min_lbl = bigLabel(row, big, big_space, "--");
 
-    date_lbl = lv_label_create(tab);
-    lv_obj_set_style_text_font(date_lbl, isLargeScreen ? &lv_font_montserrat_20 : &lv_font_montserrat_14, LV_PART_MAIN);
-    lv_obj_set_style_text_color(date_lbl, lv_color_white(), LV_PART_MAIN);
-    lv_label_set_text(date_lbl, "");
-    lv_obj_align(date_lbl, LV_ALIGN_CENTER, 0, time_y + (isLargeScreen ? 52 : 40));
+    sec_lbl = bigLabel(stack, small, small_space, "--");   // the seconds on the next line
 
     createAlarmBar(tab, isLargeScreen);
 
-    last_date_ms = 0;
-    trip_timer = lv_timer_create(trip_tick, TRIP_PERIOD_MS, nullptr);
+    clock_timer = lv_timer_create(clock_tick, 70, nullptr);
 }
 
 void tripSetTime(const char* time_str) {
     if (time_str == nullptr) return;
-    alarmRingingSetTime(time_str);   // the big label keeps its own seconds in trip_tick()
+    alarmRingingSetTime(time_str);   // the ringing view still follows the header clock
 }
