@@ -174,7 +174,7 @@ void WifiManager::update() {
 
         case WIFI_STATE_AP_MODE:
 #ifndef NATIVE_TEST
-            if (_ssid.length() > 0 && (millis() - _lastReconnectAttempt > (_reconnectInterval * 3))) {
+            if (_ssid.length() > 0 && !wifi_scan_hold && (millis() - _lastReconnectAttempt > (_reconnectInterval * 3))) {
                 _lastReconnectAttempt = millis();
                 Serial.println("[WiFi] Attempting background STA reconnect in AP mode...");
                 configureStaticIP();
@@ -232,9 +232,14 @@ int8_t WifiManager::getRSSI() const {
     return -100;
 }
 
+volatile bool wifi_scan_hold = false;
+
+// The secrets file ships with a placeholder name; that is not a network
+static bool isPlaceholderSsid(const String& s) { return s == "YOUR_WIFI_SSID"; }
+
 void WifiManager::setCredentials(const String& ssid, const String& password) {
-    _ssid = ssid;
-    _password = password;
+    _ssid = isPlaceholderSsid(ssid) ? String("") : ssid;
+    _password = isPlaceholderSsid(ssid) ? String("") : password;
 }
 
 String WifiManager::getAPSSID() {

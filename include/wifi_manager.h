@@ -18,6 +18,10 @@ enum WifiState {
     WIFI_STATE_AP_MODE
 };
 
+// Set by the on-device Wi-Fi picker (ui_wifi.cpp) while it scans: the manager must not start connection attempts,
+// which cancel a scan in progress.
+extern volatile bool wifi_scan_hold;
+
 class WifiManager {
 public:
     WifiManager(const char* ssid, const char* password);
