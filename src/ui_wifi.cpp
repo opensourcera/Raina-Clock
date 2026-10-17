@@ -232,9 +232,10 @@ static void pagePassword(const String& ssid) {
     clearPage();
     int w = lv_obj_get_width(overlay), h = lv_obj_get_height(overlay);
     int th = large ? 48 : 36, ch = large ? 52 : 42, gap = 4;
+    int eyeW = th + 8;                                   // the eye sits at the top right, next to the input box
     ta = lv_textarea_create(overlay);
-    lv_obj_set_size(ta, w - 8, th);
-    lv_obj_align(ta, LV_ALIGN_TOP_MID, 0, 3);
+    lv_obj_set_size(ta, w - 8 - eyeW - 4, th);
+    lv_obj_align(ta, LV_ALIGN_TOP_LEFT, 4, 3);
     lv_textarea_set_one_line(ta, true);
     lv_textarea_set_password_mode(ta, true);
     lv_textarea_set_max_length(ta, 63);
@@ -242,10 +243,17 @@ static void pagePassword(const String& ssid) {
     lv_textarea_set_placeholder_text(ta, ph);
     lv_obj_set_style_text_font(ta, font(), LV_PART_MAIN);
 
+    lv_obj_t* eye = button(overlay, LV_SYMBOL_EYE_OPEN, [](lv_event_t* e) {
+        bool hide = !lv_textarea_get_password_mode(ta);
+        lv_textarea_set_password_mode(ta, hide);
+        lv_label_set_text(lv_obj_get_child(lv_event_get_target(e), 0), hide ? LV_SYMBOL_EYE_OPEN : LV_SYMBOL_EYE_CLOSE);
+    }, 0x94e2d5, eyeW, th);
+    lv_obj_align(eye, LV_ALIGN_TOP_RIGHT, -4, 3);
+
     int ky = th + 3 + gap, kh = h - ky - ch - 2 * gap;
     make_keyboard(0, ky, w, kh, false);
 
-    // The control row: Show, Aa, 123, Space (double), Del, Cancel, OK
+    // The control row, every key the same size: Aa, 123, Space (double), Del, X, OK
     int cy = h - ch - gap, bw = (w - 8 - 6 * 3) / 7;
     int x = 4;
     auto add = [&](const char* txt, lv_event_cb_t cb, uint32_t col, int units) {
@@ -255,11 +263,6 @@ static void pagePassword(const String& ssid) {
         x += bwidth + 3;
         return b;
     };
-    add(LV_SYMBOL_EYE_OPEN, [](lv_event_t* e) {
-        bool hide = !lv_textarea_get_password_mode(ta);
-        lv_textarea_set_password_mode(ta, hide);
-        lv_label_set_text(lv_obj_get_child(lv_event_get_target(e), 0), hide ? LV_SYMBOL_EYE_OPEN : LV_SYMBOL_EYE_CLOSE);
-    }, 0x94e2d5, 1);
     add("Aa", [](lv_event_t*) { kb_show_page(kb_page == 0 ? 1 : 0); }, 0x89b4fa, 1);
     add("123", [](lv_event_t* e) {
         int next = kb_page == 2 ? 3 : (kb_page == 3 ? 0 : 2);
@@ -268,11 +271,8 @@ static void pagePassword(const String& ssid) {
     }, 0xf9e2af, 1);
     add("Space", [](lv_event_t*) { lv_textarea_add_char(ta, ' '); }, 0xcdd6f4, 2);
     add(LV_SYMBOL_BACKSPACE, [](lv_event_t*) { lv_textarea_del_char(ta); }, 0xfab387, 1);
-    int rest = w - 4 - x;
-    lv_obj_t* cancel = button(overlay, LV_SYMBOL_CLOSE, [](lv_event_t*) { pageList(); }, 0xf38ba8, rest / 2 - 2, ch);
-    lv_obj_set_pos(cancel, x, cy);
-    lv_obj_t* ok = button(overlay, LV_SYMBOL_OK, [](lv_event_t*) { connect_now(); }, 0xa6e3a1, rest - rest / 2 - 2, ch);
-    lv_obj_set_pos(ok, x + rest / 2, cy);
+    add(LV_SYMBOL_CLOSE, [](lv_event_t*) { pageList(); }, 0xf38ba8, 1);
+    add(LV_SYMBOL_OK, [](lv_event_t*) { connect_now(); }, 0xa6e3a1, 1);
 }
 
 // ---- page 3: the zip code for the weather
