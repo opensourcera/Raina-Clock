@@ -96,7 +96,7 @@ void createTripTab(lv_obj_t* tab, lv_obj_t* tabview, int tabIndex, bool isLandsc
     lv_obj_set_style_pad_all(row, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_column(row, 0, LV_PART_MAIN);
     lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-    hour_lbl = digits(row, big, "--");
+    hour_lbl = digits(row, big, " ");   // blank until the time is known: the font has no dash
 
     // The font's colon sits in a full-width cell; a narrow box with the colon centred and allowed to overflow packs it
     lv_obj_t* colon_box = lv_obj_create(row);
@@ -109,9 +109,9 @@ void createTripTab(lv_obj_t* tab, lv_obj_t* tabview, int tabIndex, bool isLandsc
     lv_obj_t* colon = digits(colon_box, big, ":");
     lv_obj_align(colon, LV_ALIGN_TOP_MID, 0, 0);
 
-    min_lbl = digits(row, big, "--");
+    min_lbl = digits(row, big, " ");
 
-    sec_lbl = digits(stack, small, "--");                // the seconds on the next line
+    sec_lbl = digits(stack, small, " ");                // the seconds on the next line
 
     createAlarmBar(tab, isLargeScreen);
 

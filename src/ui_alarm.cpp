@@ -10,7 +10,7 @@
 extern SettingsManager settings;
 extern ScreenSaverManager screensaver;
 int getCurrentThemeFlavor();
-LV_FONT_DECLARE(font_ehs_56);
+LV_FONT_DECLARE(font_ehs_64);
 
 static lv_obj_t* alarm_label = nullptr;
 static lv_obj_t* ring_overlay = nullptr;
@@ -22,6 +22,19 @@ static lv_obj_t* roll_ampm = nullptr;
 static bool alarm_large = false;
 
 static bool localNow(struct tm* t) { return getLocalTimeWrapper(t, 0); }
+
+// The time on the ringing screen: digits and a colon only (the font has no letters)
+static void ringTimeNow() {
+    if (ring_time == nullptr) return;
+    struct tm t;
+    if (!getLocalTimeWrapper(&t, 0)) return;
+    bool use24 = settings.getUse24HourFormat();
+    int hour = use24 ? t.tm_hour : (t.tm_hour % 12 == 0 ? 12 : t.tm_hour % 12);
+    char b[12];
+    lv_snprintf(b, sizeof(b), use24 ? "%02d:%02d" : "%d:%02d", hour, t.tm_min);
+    lv_label_set_text(ring_time, b);
+    lv_obj_align(ring_time, LV_ALIGN_CENTER, 0, -34);
+}
 
 static void ringingStop() {
     audio.stop();
@@ -38,6 +51,8 @@ static void ringingSnooze() {
     refreshAlarmUI();
 }
 
+void alarmRingingStopNow() { ringingStop(); }
+void alarmRingingSnoozeNow() { ringingSnooze(); }
 static void stop_cb(lv_event_t* e) { (void)e; ringingStop(); }
 static void snooze_cb(lv_event_t* e) { (void)e; ringingSnooze(); }
 
@@ -281,10 +296,11 @@ void showAlarmRinging() {
     lv_obj_clear_flag(ring_overlay, LV_OBJ_FLAG_SCROLLABLE);
 
     ring_time = lv_label_create(ring_overlay);
-    lv_obj_set_style_text_font(ring_time, &font_ehs_56, LV_PART_MAIN);
+    lv_obj_set_style_text_font(ring_time, &font_ehs_64, LV_PART_MAIN);
     lv_obj_set_style_text_color(ring_time, lv_color_hex(0xf9e2af), LV_PART_MAIN);
-    lv_label_set_text(ring_time, "--:--");
+    lv_label_set_text(ring_time, " ");
     lv_obj_align(ring_time, LV_ALIGN_CENTER, 0, -34);
+    ringTimeNow();
 
     lv_obj_t* song = lv_label_create(ring_overlay);
     String what = audio.nowPlaying();
@@ -317,7 +333,8 @@ void hideAlarmRinging() {
 bool isAlarmRingingShown() { return ring_overlay != nullptr; }
 
 void alarmRingingSetTime(const char* time_str) {
-    if (ring_time && time_str) { lv_label_set_text(ring_time, time_str); lv_obj_align(ring_time, LV_ALIGN_CENTER, 0, -34); }
+    (void)time_str;                      // the header text carries "AM"/"PM", which the clock font has no letters for
+    ringTimeNow();
 }
 
 void startAlarmRinging() {

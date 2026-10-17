@@ -11,6 +11,8 @@ void showAlarmRinging();
 void hideAlarmRinging();
 bool isAlarmRingingShown();
 void alarmRingingSetTime(const char* time_str);
+void alarmRingingStopNow();                  // what the Stop button does (also used by the web API)
+void alarmRingingSnoozeNow();                // what the Snooze button does
 void startAlarmRinging();                    // ringing view + sound, from the main loop when the alarm is due
 
 #endif // UI_ALARM_H

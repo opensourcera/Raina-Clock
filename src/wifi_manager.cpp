@@ -22,6 +22,7 @@
 extern SettingsManager settings;
 #include "todo_manager.h"
 #include "alarm_manager.h"
+#include "ui_alarm.h"
 #ifndef NATIVE_TEST
 #include "todo_html.h"
 #include "alarm_html.h"
@@ -662,7 +663,15 @@ void WifiManager::startWebServer() {
         if (!file) audio.playBuiltin(false);
         _webServer->send(200, "text/plain", file ? "Playing " + song : "File not on the card: playing the built-in tune");
     });
-    _webServer->on("/api/alarm/stop", HTTP_POST, [this]() { audio.stop(); _webServer->send(200, "text/plain", "Stopped"); });
+    _webServer->on("/api/alarm/stop", HTTP_POST, [this]() {
+        if (alarmClock.isRinging()) alarmRingingStopNow(); else audio.stop();   // dismiss a ringing alarm, or just end a test sound
+        _webServer->send(200, "text/plain", "Stopped");
+    });
+    _webServer->on("/api/alarm/snooze", HTTP_POST, [this]() {
+        if (!alarmClock.isRinging()) { _webServer->send(409, "text/plain", "The alarm is not ringing"); return; }
+        alarmRingingSnoozeNow();
+        _webServer->send(200, "text/plain", "Snoozed");
+    });
     _webServer->on("/api/music", HTTP_GET, [this]() { _webServer->send(200, "application/json", AudioPlayer::musicList()); });
     _webServer->on("/api/music/upload", HTTP_POST, [this]() {
         _webServer->send(_uploadFile ? 500 : 200, "text/plain", _uploadFile ? "Upload did not finish" : "OK");
