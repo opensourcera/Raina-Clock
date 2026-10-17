@@ -144,6 +144,8 @@ static lv_obj_t *footer_label;
 static lv_obj_t *local_sensor_cnt = nullptr;
 static lv_obj_t *local_sensor_lbl = nullptr;
 static lv_obj_t *tabview_obj = nullptr;
+static lv_obj_t *header_obj = nullptr;     // the header bar, hidden on the Clock tab
+static int ui_screen_w = 0, ui_screen_h = 0, ui_header_h = 0;
 static lv_obj_t *settings_tabs_obj = nullptr;   // the tab bar inside Setup
 
 // Forecast widgets
@@ -556,6 +558,7 @@ void initUI() {
 #ifndef NATIVE_TEST
     rotation = settings.getScreenOrientation();
 #endif
+    Serial.printf("[ui] initUI rotation %d\n", rotation);
     bool isLandscape = (rotation == 1 || rotation == 3);
     int screen_w = lv_disp_get_hor_res(NULL);
     int screen_h = lv_disp_get_ver_res(NULL);
@@ -563,6 +566,7 @@ void initUI() {
     bool isLargeScreen = (lv_disp_get_hor_res(NULL) >= 480 || lv_disp_get_ver_res(NULL) >= 480); // 60px in portrait to fit 2-line title
 
     lv_obj_t * header = lv_obj_create(scr);
+    header_obj = header; ui_screen_w = screen_w; ui_screen_h = screen_h; ui_header_h = header_h;
     lv_obj_set_size(header, screen_w, header_h);
     lv_obj_align(header, LV_ALIGN_TOP_MID, 0, 0);
     lv_obj_set_style_bg_color(header, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).crust), LV_PART_MAIN); // Crust header background
@@ -674,7 +678,9 @@ void initUI() {
     lv_obj_set_style_bg_color(tab_todo, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).base), LV_PART_MAIN);
     lv_obj_set_style_pad_all(tab_todo, 8, LV_PART_MAIN);
     lv_obj_set_scrollbar_mode(tab_todo, LV_SCROLLBAR_MODE_AUTO);
+    Serial.println("[ui] todo tab");
     createTodoTab(tab_todo, isLandscape, isLargeScreen);
+    Serial.println("[ui] clock tab");
     createTripTab(tab_trip, tabview, 4, isLandscape, isLargeScreen);
 
     // Create Hourly Forecast Chart
@@ -1043,6 +1049,7 @@ void initUI() {
     lv_obj_set_style_pad_gap(right_col, isLandscape ? 4 : 8, LV_PART_MAIN);
     lv_obj_clear_flag(right_col, LV_OBJ_FLAG_SCROLLABLE);
 
+    Serial.println("[ui] clock tab done, settings tabs");
     // --- Settings in seven short tabs (cyd-alarm-clock): Net, Look, Disp, Light, Night, Data, Sens. No long list.
     // The upstream code keeps building rows into left_col / right_col; flush_settings() moves everything built so
     // far into the page chosen for that section; the next call announces the page of the next section.
@@ -1079,6 +1086,7 @@ void initUI() {
     lv_obj_add_flag(set_junk, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_size(set_junk, 1, 1);
 
+    Serial.println("[ui] pages made, radios next");
     // The radio choices go in first, so they lead their pages
     {
         const char * themes[4] = {"Mocha", "Macchiato", "Frappe", "Latte"};
@@ -1091,8 +1099,10 @@ void initUI() {
         for (int i = 0; i < 4; i++) make_radio(set_pg[2], orients[i], 3, i, cur_idx == i, isLargeScreen);
     }
 
+    Serial.println("[ui] radios made");
     int set_cur_page = 0;
     auto flush_settings = [&](int next_page) {
+        Serial.println(String("[ui] section done, next page ") + next_page);
         lv_obj_t * cols[2] = {left_col, right_col};
         for (int c = 0; c < 2; c++) {
             while (lv_obj_get_child_cnt(cols[c]) > 0) {
@@ -1621,6 +1631,7 @@ void initUI() {
     lv_obj_set_style_bg_color(loc_type_list, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).blue), LV_PART_SELECTED | LV_STATE_CHECKED);
     lv_obj_set_style_text_color(loc_type_list, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).crust), LV_PART_SELECTED | LV_STATE_CHECKED);
 
+    Serial.println("[ui] sens: type dropdown done");
     // Local Sensor Update Interval Slider
     lv_obj_t * loc_sens_slider_lbl = lv_label_create(right_col);
     lv_label_set_text_fmt(loc_sens_slider_lbl, "Sensor Update Interval: %ds", settings.getLocalSensorUpdateInterval());
@@ -1636,6 +1647,7 @@ void initUI() {
     lv_obj_set_style_bg_color(ui_slider_local_sensor_update_interval, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).blue), LV_PART_INDICATOR);
     lv_obj_set_style_bg_color(ui_slider_local_sensor_update_interval, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).crust), LV_PART_KNOB);
 
+    Serial.println("[ui] sens: interval slider done");
     // Temperature Offset Text Area
     lv_obj_t * temp_offset_lbl = lv_label_create(right_col);
     lv_label_set_text(temp_offset_lbl, "Temperature Offset");
@@ -1653,6 +1665,7 @@ void initUI() {
     lv_obj_set_style_bg_color(ui_ta_temp_offset, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).mantle), LV_PART_MAIN);
     lv_obj_set_style_text_color(ui_ta_temp_offset, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).text), LV_PART_MAIN);
 
+    Serial.println("[ui] sens: temp offset done");
     // Humidity Offset Text Area
     lv_obj_t * hum_offset_lbl = lv_label_create(right_col);
     lv_label_set_text(hum_offset_lbl, "Humidity Offset");
@@ -1679,6 +1692,7 @@ void initUI() {
         }
         for (int i = nl - 1; i >= 0; i--) lv_obj_move_to_index(lead[i], 0);
     }
+    Serial.println("[ui] settings built");
     // Re-apply offline indicator state if active
     if (is_offline_mode) {
         updateOfflineIndicator(true);
@@ -1947,6 +1961,19 @@ void setUIActiveTab(int index) {
     if (tabview_obj != nullptr && index >= 0 && index < 6) {
         lv_tabview_set_act(tabview_obj, index, LV_ANIM_OFF);
     }
+}
+
+void setClockFullscreen(bool on) {
+    if (header_obj == nullptr || tabview_obj == nullptr) return;
+    if (on) {
+        lv_obj_add_flag(header_obj, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_size(tabview_obj, ui_screen_w, ui_screen_h);
+    } else {
+        lv_obj_clear_flag(header_obj, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_size(tabview_obj, ui_screen_w, ui_screen_h - ui_header_h);
+    }
+    lv_obj_align(tabview_obj, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_invalidate(lv_scr_act());
 }
 
 void setUISettingsTab(int index) {
