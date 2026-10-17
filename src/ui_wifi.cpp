@@ -203,7 +203,7 @@ static void make_keyboard(int x, int y, int w, int h, bool digitsOnly) {
     for (int i = 0; i < 40; i++) ctrl_keys[i] = (lv_btnmatrix_ctrl_t)1;   // every key one unit wide
     kb = lv_keyboard_create(overlay);
     lv_obj_set_size(kb, w, h);
-    lv_obj_set_pos(kb, x, y);
+    lv_obj_align(kb, LV_ALIGN_TOP_LEFT, x, y);   // lv_keyboard_create aligns it to the bottom; set_pos would then offset from there
     lv_keyboard_set_map(kb, LV_KEYBOARD_MODE_USER_1, digitsOnly ? map_digits : map_lower, ctrl_keys);
     lv_keyboard_set_map(kb, LV_KEYBOARD_MODE_USER_2, map_upper, ctrl_keys);
     lv_keyboard_set_map(kb, LV_KEYBOARD_MODE_USER_3, map_num, ctrl_keys);
