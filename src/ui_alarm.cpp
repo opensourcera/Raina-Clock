@@ -169,67 +169,84 @@ static void nameWindowOpen() {
     lv_obj_set_style_pad_all(name_win, 0, LV_PART_MAIN);
     lv_obj_clear_flag(name_win, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Top: back arrow, the name box, delete. Below: three rows of big letter keys; the last ends with Space and Enter.
-    int th = alarm_large ? 48 : 38, gap = 4;
-    int sideW = th + 10;
-    winBtn(name_win, LV_SYMBOL_LEFT, [](lv_event_t*) { nameWindowClose(); }, 0x6c7086, 3, 3, sideW, th);
-    winBtn(name_win, LV_SYMBOL_BACKSPACE, [](lv_event_t*) { if (name_ta) lv_textarea_del_char(name_ta); }, 0xfab387, W - sideW - 3, 3, sideW, th);
+    // The name box across the top; below it big letter keys, delete at the end of the z-m row, and a last row of
+    // Cancel, a wide Space and OK.
+    lv_obj_set_style_bg_color(name_win, lv_color_hex(0x0b1e3a), LV_PART_MAIN);
+    int th = alarm_large ? 52 : 40, gap = 4;
     name_ta = lv_textarea_create(name_win);
-    lv_obj_set_size(name_ta, W - 2 * sideW - 14, th);
-    lv_obj_set_pos(name_ta, sideW + 7, 3);
+    lv_obj_set_size(name_ta, W - 12, th);
+    lv_obj_set_pos(name_ta, 6, 5);
     lv_textarea_set_one_line(name_ta, true);
     lv_textarea_set_max_length(name_ta, 20);
     lv_textarea_set_accepted_chars(name_ta, "abcdefghijklmnopqrstuvwxyz ");
     lv_textarea_set_placeholder_text(name_ta, "Alarm name");
     lv_textarea_set_text(name_ta, dlg_name.c_str());
-    lv_obj_set_style_text_font(name_ta, alarm_large ? &lv_font_montserrat_20 : &lv_font_montserrat_14, LV_PART_MAIN);
+    lv_obj_set_style_text_font(name_ta, alarm_large ? &lv_font_montserrat_28 : &lv_font_montserrat_20, LV_PART_MAIN);
+    lv_obj_set_style_text_color(name_ta, lv_color_hex(0xffffff), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(name_ta, lv_color_hex(0x13305e), LV_PART_MAIN);
+    lv_obj_set_style_border_color(name_ta, lv_color_hex(0x38bdf8), LV_PART_MAIN);
+    lv_obj_set_style_border_width(name_ta, 2, LV_PART_MAIN);
+    lv_obj_set_style_radius(name_ta, 10, LV_PART_MAIN);
+    lv_obj_set_style_pad_ver(name_ta, alarm_large ? 10 : 7, LV_PART_MAIN);
+    lv_obj_set_style_text_color(name_ta, lv_color_hex(0x7f9cc9), LV_PART_TEXTAREA_PLACEHOLDER);
     lv_obj_add_state(name_ta, LV_STATE_FOCUSED);        // shows the cursor
     lv_obj_clear_flag(name_ta, LV_OBJ_FLAG_SCROLL_ON_FOCUS);   // or the top layer scrolls and the window slides up
     // The window belongs to the Set popup: should that go by any other way, the window goes too
     lv_timer_t* guard = lv_timer_create([](lv_timer_t*) { if (set_dialog == nullptr) nameWindowClose(); }, 500, nullptr);
     lv_obj_add_event_cb(name_win, [](lv_event_t* e) { lv_timer_del((lv_timer_t*)lv_event_get_user_data(e)); }, LV_EVENT_DELETE, guard);
 
-    // Widths in units: a letter is 2, Space and Enter 3, so the last row lines up with the others. Space is the blank key.
-    static const char* letters[] = {"q","w","e","r","t","y","u","i","o","p","\n","a","s","d","f","g","h","j","k","l","\n",
-                                    "z","x","c","v","b","n","m"," ",LV_SYMBOL_OK,""};
-    static lv_btnmatrix_ctrl_t ctrl[29];
-    for (int i = 0; i < 29; i++) ctrl[i] = (lv_btnmatrix_ctrl_t)2;
-    ctrl[26] = (lv_btnmatrix_ctrl_t)3;
-    ctrl[27] = (lv_btnmatrix_ctrl_t)(3 | LV_BTNMATRIX_CTRL_CHECKED);   // Enter, drawn green
-    int ky = th + 3 + gap;
+    static const char* keys[] = {"q","w","e","r","t","y","u","i","o","p","\n",
+                                 "a","s","d","f","g","h","j","k","l","\n",
+                                 "z","x","c","v","b","n","m",LV_SYMBOL_BACKSPACE,"\n",
+                                 "Cancel","Space","OK",""};
+    static lv_btnmatrix_ctrl_t ctrl[30];
+    for (int i = 0; i < 30; i++) ctrl[i] = (lv_btnmatrix_ctrl_t)2;    // a letter is 2 units
+    ctrl[26] = (lv_btnmatrix_ctrl_t)4;                                  // delete: two letters wide
+    ctrl[27] = (lv_btnmatrix_ctrl_t)3;                                  // Cancel
+    ctrl[28] = (lv_btnmatrix_ctrl_t)6;                                  // Space
+    ctrl[29] = (lv_btnmatrix_ctrl_t)3;                                  // OK
+    int ky = th + 5 + gap;
     lv_obj_t* kb = lv_btnmatrix_create(name_win);
-    lv_btnmatrix_set_map(kb, letters);
+    lv_btnmatrix_set_map(kb, keys);
     lv_btnmatrix_set_ctrl_map(kb, ctrl);
     lv_obj_set_pos(kb, 0, ky);
     lv_obj_set_size(kb, W, H - ky);
-    lv_obj_set_style_bg_color(kb, lv_color_hex(0x11111b), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(kb, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_style_radius(kb, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(kb, 3, LV_PART_MAIN);
-    lv_obj_set_style_pad_gap(kb, 4, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(kb, 5, LV_PART_MAIN);
+    lv_obj_set_style_pad_gap(kb, 5, LV_PART_MAIN);
     lv_obj_set_style_border_width(kb, 0, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(kb, lv_color_hex(0x45475a), LV_PART_ITEMS);
-    lv_obj_set_style_text_color(kb, lv_color_hex(0xcdd6f4), LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(kb, lv_color_hex(0x2b7fd6), LV_PART_ITEMS);
+    lv_obj_set_style_bg_grad_color(kb, lv_color_hex(0x1c5fb0), LV_PART_ITEMS);
+    lv_obj_set_style_bg_grad_dir(kb, LV_GRAD_DIR_VER, LV_PART_ITEMS);
+    lv_obj_set_style_text_color(kb, lv_color_hex(0xffffff), LV_PART_ITEMS);
     lv_obj_set_style_text_font(kb, alarm_large ? &lv_font_montserrat_28 : &lv_font_montserrat_20, LV_PART_ITEMS);
     lv_obj_set_style_radius(kb, 8, LV_PART_ITEMS);
     lv_obj_set_style_shadow_width(kb, 0, LV_PART_ITEMS);
     lv_obj_set_style_border_width(kb, 0, LV_PART_ITEMS);
-    lv_obj_set_style_bg_color(kb, lv_color_hex(0xa6e3a1), LV_PART_ITEMS | LV_STATE_CHECKED);
-    lv_obj_set_style_text_color(kb, lv_color_hex(0x11111b), LV_PART_ITEMS | LV_STATE_CHECKED);
-    lv_obj_set_style_bg_color(kb, lv_color_hex(0xfab387), LV_PART_ITEMS | LV_STATE_PRESSED);
-    lv_obj_set_style_text_color(kb, lv_color_hex(0x11111b), LV_PART_ITEMS | LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(kb, lv_color_hex(0x7dd3fc), LV_PART_ITEMS | LV_STATE_PRESSED);
+    lv_obj_set_style_bg_grad_color(kb, lv_color_hex(0x7dd3fc), LV_PART_ITEMS | LV_STATE_PRESSED);
+    lv_obj_set_style_text_color(kb, lv_color_hex(0x0b1e3a), LV_PART_ITEMS | LV_STATE_PRESSED);
     lv_obj_add_event_cb(kb, [](lv_event_t* e) {
         lv_obj_t* m = lv_event_get_target(e);
         uint16_t id = lv_btnmatrix_get_selected_btn(m);
         if (id == LV_BTNMATRIX_BTN_NONE || name_ta == nullptr) return;
         const char* t = lv_btnmatrix_get_btn_text(m, id);
         if (t == nullptr) return;
-        if (strcmp(t, LV_SYMBOL_OK) == 0) {
+        if (strcmp(t, "OK") == 0) {
             dlg_name = String(lv_textarea_get_text(name_ta));
             dlg_name.trim();
+            eventLog("alarm: name typed '%s'", dlg_name.c_str());
             nameButtonText();
             nameWindowClose();
+        } else if (strcmp(t, "Cancel") == 0) {
+            nameWindowClose();
+        } else if (strcmp(t, "Space") == 0) {
+            lv_textarea_add_char(name_ta, ' ');
+        } else if (strcmp(t, LV_SYMBOL_BACKSPACE) == 0) {
+            lv_textarea_del_char(name_ta);
         } else {
-            lv_textarea_add_char(name_ta, t[0]);          // a letter, or the blank key's space
+            lv_textarea_add_char(name_ta, t[0]);
         }
     }, LV_EVENT_VALUE_CHANGED, nullptr);
 }
@@ -321,6 +338,8 @@ static void dialog_save_cb(lv_event_t* e) {
     }
     alarmClock.setName(dlg_name);
     alarmClock.save();
+    eventLog("alarm: set to %02d:%02d%s, name '%s'", alarmClock.cfg().hour, alarmClock.cfg().minute,
+             alarmClock.cfg().repeat ? "" : " (once)", alarmClock.cfg().name.c_str());
     dialogClose();
     refreshAlarmUI();
 }
@@ -600,11 +619,11 @@ void showAlarmRinging() {
     lv_obj_align(ring_time, LV_ALIGN_CENTER, 0, -34);
     ringTimeNow();
 
-    // The alarm's name in bold (the same text twice, a pixel apart: there is no bold font), or a plain "Wake up"
+    // The alarm's name in bold (the same text four times, a pixel apart: there is no bold font), or a plain "Wake up"
     const String& nm = alarmClock.cfg().name;
     if (nm.length()) {
         int W = lv_disp_get_hor_res(nullptr);
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < 4; i++) {
             lv_obj_t* l = lv_label_create(ring_overlay);
             lv_label_set_text(l, nm.c_str());
             lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
@@ -612,7 +631,7 @@ void showAlarmRinging() {
             lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
             lv_obj_set_style_text_font(l, alarm_large ? &lv_font_montserrat_48 : &lv_font_montserrat_28, LV_PART_MAIN);
             lv_obj_set_style_text_color(l, lv_color_hex(0xf5e0dc), LV_PART_MAIN);
-            lv_obj_align(l, LV_ALIGN_CENTER, i, alarm_large ? 36 : 20);
+            lv_obj_align(l, LV_ALIGN_CENTER, i & 1, (alarm_large ? 36 : 20) + (i >> 1));
         }
     } else {
         lv_obj_t* song = lv_label_create(ring_overlay);
