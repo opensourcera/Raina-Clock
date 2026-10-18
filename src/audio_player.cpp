@@ -34,7 +34,7 @@ void AudioPlayer::begin() {
     out->SetOutputModeMono(true);
     out->SetGain(_volume / 100.0f);
     _out = out;
-    xTaskCreatePinnedToCore(audioTask, "audio", 8192, this, 2, nullptr, 0);
+    xTaskCreatePinnedToCore(audioTask, "audio", 4096, this, 2, nullptr, 0);
 }
 
 void AudioPlayer::playBeep(bool loop) {

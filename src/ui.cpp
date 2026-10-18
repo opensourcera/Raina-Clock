@@ -1,5 +1,6 @@
 #include "ui.h"
 #include "ui_todo.h"
+#include "ui_weather.h"
 #include "ui_menu.h"
 #include "ui_trip.h"
 #include "ui_wifi.h"
@@ -63,9 +64,25 @@ static void close_wifi_info_cb(lv_event_t * e) {
     }
 }
 
+static lv_obj_t * wifi_slash = nullptr;
+static bool wifi_ok = false;
+static void wifi_blink_cb(lv_timer_t * t) {
+    (void)t;
+    static bool dim = false;
+    if (wifi_label == nullptr) return;
+    dim = !wifi_ok && !dim;
+    lv_obj_set_style_opa(wifi_label, dim ? LV_OPA_20 : LV_OPA_COVER, LV_PART_MAIN);
+}
+static void wifiShowState(bool ok) {
+    wifi_ok = ok;
+    if (wifi_slash == nullptr) return;
+    if (ok) lv_obj_add_flag(wifi_slash, LV_OBJ_FLAG_HIDDEN); else lv_obj_clear_flag(wifi_slash, LV_OBJ_FLAG_HIDDEN);
+    if (ok) lv_obj_set_style_opa(wifi_label, LV_OPA_COVER, LV_PART_MAIN);
+}
+
 static void wifi_icon_click_cb(lv_event_t * e) {
     if (wifi_info_dialog != nullptr) return;
-    if (WiFi.status() != WL_CONNECTED) { showWifiSetup(); return; }   // not connected: tapping the icon opens the picker
+    showWifiSetup(); return;                       // the icon goes straight to the Wi-Fi settings
 
     bool isLargeScreen = (lv_disp_get_hor_res(NULL) >= 480 || lv_disp_get_ver_res(NULL) >= 480);
 
@@ -139,6 +156,7 @@ static lv_obj_t *wind_label;
 static lv_obj_t *status_lbl;
 static lv_obj_t *status_icon_lbl;
 static lv_obj_t *time_label;
+static lv_obj_t *header_city = nullptr;
 static lv_obj_t *icon_lbl;
 static lv_obj_t *tz_val_label;
 static lv_obj_t *footer_label;
@@ -611,13 +629,31 @@ void initUI() {
     lv_obj_add_flag(wifi_label, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_ext_click_area(wifi_label, 15);
     lv_obj_add_event_cb(wifi_label, wifi_icon_click_cb, LV_EVENT_CLICKED, NULL);
+    {   // the slash across the icon while Wi-Fi is down
+        static lv_point_t pts[2] = {{0, 1}, {18, 15}};
+        wifi_slash = lv_line_create(wifi_label);
+        lv_line_set_points(wifi_slash, pts, 2);
+        lv_obj_set_style_line_width(wifi_slash, 2, LV_PART_MAIN);
+        lv_obj_set_style_line_rounded(wifi_slash, true, LV_PART_MAIN);
+        lv_obj_set_style_line_color(wifi_slash, lv_color_hex(0xf38ba8), LV_PART_MAIN);
+        lv_obj_add_flag(wifi_label, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+        lv_timer_create(wifi_blink_cb, 500, nullptr);
+        wifiShowState(false);
+    }
 
     // Time Label in Header
     time_label = lv_label_create(header_right_area);
     lv_label_set_text(time_label, "--:--");
+    lv_obj_add_flag(time_label, LV_OBJ_FLAG_HIDDEN);   // no clock in the header: the Clock page has the big one
     lv_obj_set_style_text_color(time_label, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).text), LV_PART_MAIN);
 
     // Offline Label in Header (initially hidden)
+    // The town of the weather, just left of the Wi-Fi icon
+    header_city = lv_label_create(header_right_area);
+    lv_label_set_text(header_city, "");
+    lv_obj_set_style_text_color(header_city, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).subtext0), LV_PART_MAIN);
+    lv_obj_move_to_index(header_city, 1);
+
     offline_indicator = lv_label_create(header_right_area);
     lv_label_set_text(offline_indicator, LV_SYMBOL_WARNING " Offline");
     lv_obj_set_style_text_color(offline_indicator, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).peach), LV_PART_MAIN);
@@ -650,6 +686,7 @@ void initUI() {
     // Tune swipe animation: speed it up and disable momentum throw for crisp
     // tab transitions on the embedded display.
     lv_obj_t * tab_content = lv_tabview_get_content(tabview);
+    lv_obj_clear_flag(tab_content, LV_OBJ_FLAG_SCROLLABLE);   // pages change through the slide-up menu only
     lv_obj_set_style_anim_time(tab_content, DISPLAY_SWIPE_ANIM_MS, 0); // set in config/config.h
     lv_obj_clear_flag(tab_content, LV_OBJ_FLAG_SCROLL_MOMENTUM);
 
@@ -1089,7 +1126,7 @@ void initUI() {
         lv_obj_set_style_text_font(bl, isLargeScreen ? &lv_font_montserrat_20 : &lv_font_montserrat_14, LV_PART_MAIN);
         lv_obj_set_style_text_color(bl, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).text), LV_PART_MAIN);
         lv_obj_center(bl);
-        lv_obj_add_event_cb(back, [](lv_event_t * e) { (void)e; if (tabview_obj) lv_tabview_set_act(tabview_obj, 0, LV_ANIM_OFF); }, LV_EVENT_CLICKED, nullptr);
+        lv_obj_add_event_cb(back, [](lv_event_t * e) { (void)e; if (tabview_obj) lv_tabview_set_act(tabview_obj, 4, LV_ANIM_OFF); }, LV_EVENT_CLICKED, nullptr);
     }
     // Page 2 (Disp) is gone: its time zone and 24-hour rows live on Look; orientation and the title switch are dropped
     const char * set_names[7] = {LV_SYMBOL_WIFI " Net", LV_SYMBOL_IMAGE " Look", nullptr, LV_SYMBOL_EYE_OPEN " Light",
@@ -1717,9 +1754,17 @@ void initUI() {
     if (is_offline_mode) {
         updateOfflineIndicator(true);
     }
+    // The old Now, Days and Hours pages are no longer shown: free their widgets (LVGL's pool is tight) and build the
+    // Weather page in the Days tab. Their update functions return early once these pointers are null.
+    lv_obj_clean(tab_curr); lv_obj_clean(tab_fore); lv_obj_clean(tab_hourly);
+    temp_label = hum_label = wind_label = status_lbl = status_icon_lbl = icon_lbl = footer_label = local_sensor_lbl = nullptr;
+    for (int i = 0; i < 3; i++) fore_day_label[i] = fore_icon_label[i] = fore_temp_label[i] = fore_desc_label[i] = nullptr;
+    hourly_chart = nullptr; hourly_temp_series = hourly_precip_series = nullptr;
+    createWeatherPage(tab_fore, isLargeScreen);
 }
 
 void updateWifiStatus(bool connected) {
+    wifiShowState(connected);
     if (connected) {
         lv_label_set_text(wifi_label, LV_SYMBOL_WIFI);
         lv_obj_set_style_text_color(wifi_label, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).green), LV_PART_MAIN); // Catppuccin Green
@@ -1730,16 +1775,18 @@ void updateWifiStatus(bool connected) {
 }
 
 void updateWifiAPMode(const char* apSSID) {
+    wifiShowState(false);
     lv_label_set_text(wifi_label, LV_SYMBOL_WIFI);
     lv_obj_set_style_text_color(wifi_label, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).mauve), LV_PART_MAIN); // Catppuccin Mauve for AP Mode
 
+    if (status_lbl == nullptr) return;
     lv_label_set_text(status_lbl, "AP Active");
     lv_label_set_text(temp_label, "Setup");
     lv_label_set_text(hum_label, "192.168.4.1");
     lv_label_set_text(wind_label, apSSID);
 }
 
-static const char* getIconGlyph(int code) {
+const char* getIconGlyph(int code) {
     switch (code) {
         case 0:
         case 1:
@@ -1780,7 +1827,7 @@ static const char* getIconGlyph(int code) {
     }
 }
 
-static uint32_t getIconColor(int code) {
+uint32_t getIconColor(int code) {
     switch (code) {
         case 0:
         case 1:
@@ -1841,6 +1888,7 @@ void updateLocalSensorUI(float temperature, float humidity) {
 }
 
 void updateWeatherUI(float temperature, int humidity, const char* status, int weatherCode, float windSpeed, int windDirection) {
+    if (temp_label == nullptr) return;
     char temp_str[32];
     if (settings.getUnitSystem() == UNIT_IMPERIAL) {
         snprintf(temp_str, sizeof(temp_str), "%.1f °F", temperature);
@@ -1878,6 +1926,8 @@ void updateTimeUI(const char* time_str) {
 }
 
 void updateForecastUI(const WeatherData& data) {
+    weatherPanelsUpdate(data);   // the Weather page and the panel beside the clock
+    if (fore_day_label[0] == nullptr) return;
     for (int i = 0; i < 3; i++) {
         // Set Day name
         lv_label_set_text(fore_day_label[i], data.forecast[i].dayName.c_str());
@@ -1967,6 +2017,7 @@ static std::string sanitizeCityName(const char* input) {
 }
 
 void updateFooterUI(const char* update_time, const char* city) {
+    if (footer_label == nullptr) return;
     char buf[64];
     if (city && city[0] != '\0') {
         std::string clean_city = sanitizeCityName(city);
@@ -1981,6 +2032,15 @@ void setUIActiveTab(int index) {
     if (tabview_obj != nullptr && index >= 0 && index < 6) {
         lv_tabview_set_act(tabview_obj, index, LV_ANIM_OFF);
     }
+}
+
+void setHeaderCity(const char* city) {
+    if (header_city && city) lv_label_set_text(header_city, city);
+}
+
+void setHeaderTimeVisible(bool on) {
+    if (time_label == nullptr) return;
+    if (on) lv_obj_clear_flag(time_label, LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(time_label, LV_OBJ_FLAG_HIDDEN);
 }
 
 void setClockFullscreen(bool on) {

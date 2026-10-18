@@ -30,6 +30,8 @@ void showScreenSaver();
 void hideScreenSaver();
 void updateScreenSaverTime(const char* time_str);
 void setUIActiveTab(int index);
+void setHeaderCity(const char* city);   // the weather town, beside the Wi-Fi icon
+void setHeaderTimeVisible(bool on);   // the header clock: hidden on the Clock page, where it would repeat the big one
 void setClockFullscreen(bool on);   // hide the header bar and use the whole screen (the Clock tab)
 void setUISettingsTab(int index);   // the Net, Look, Disp, Light, Night, Data, Sens tabs inside Setup
 void setUIOrientation(int rotation);

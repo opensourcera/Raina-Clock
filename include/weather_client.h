@@ -4,17 +4,22 @@
 #include <Arduino.h>
 
 struct ForecastDay {
-    float tempMax;
-    float tempMin;
-    int weatherCode;
+    float tempMax = 0;
+    float tempMin = 0;
+    int weatherCode = -1;       // -1: no data for this day
+    int rainProb = 0;           // highest chance of rain that day, percent
     String status;
     String dayName;
 };
 
 struct HourlyForecast {
-    float temperature;
-    int precipitationProbability;
+    float temperature = 0;
+    int precipitationProbability = 0;
+    int weatherCode = -1;
+    int hour = -1;              // local hour of day, 0-23; -1 unknown
 };
+
+static const int FORECAST_DAYS = 7;
 
 struct WeatherData {
     float temperature;
@@ -25,7 +30,7 @@ struct WeatherData {
     float windSpeed;
     int windDirection;
     String cityName;
-    ForecastDay forecast[3];
+    ForecastDay forecast[7];
     HourlyForecast hourly[24];
 };
 
@@ -35,6 +40,7 @@ public:
     WeatherData fetchWeather();
     const String& getCityName() const { return _cityName; }
     static String getWeatherDesc(int code);
+    static void reserveMemory();   // at boot, before the screen is built: the parser's 12 KB in one piece
     static bool parseWeatherJson(const char* json, WeatherData& data, time_t ref_time = 0);
     bool parseOwmJson(const char* json, WeatherData& data, time_t ref_time = 0);
     static String serializeWeatherData(const WeatherData& data);

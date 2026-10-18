@@ -1,6 +1,7 @@
 #include "ui_trip.h"
 #include "ui_alarm.h"
 #include "ui.h"
+#include "ui_weather.h"
 #include "time_utils.h"
 #include "settings_manager.h"
 
@@ -14,6 +15,7 @@ extern SettingsManager settings;
 LV_FONT_DECLARE(font_ehs_108);
 LV_FONT_DECLARE(font_ehs_64);
 LV_FONT_DECLARE(font_ehs_56);
+LV_FONT_DECLARE(font_ehs_36);
 
 static const uint32_t LILAC = 0xC9A9F5;
 
@@ -34,8 +36,9 @@ static void clock_tick(lv_timer_t* t) {
     if (clock_tab == nullptr || clock_tabview == nullptr) return;
     int act = (int)lv_tabview_get_tab_act(clock_tabview);
     bool on_clock = act == clock_index;
-    bool full = on_clock || act == clock_index + 1;   // the header bar is away on the Clock page and on Setup
+    bool full = act == clock_index + 1;               // Setup uses the whole screen
     if (full != fullscreen_on) { fullscreen_on = full; setClockFullscreen(full); }
+
     if (!on_clock) return;
 
     struct tm ti;
@@ -75,11 +78,14 @@ void createTripTab(lv_obj_t* tab, lv_obj_t* tabview, int tabIndex, bool isLandsc
     lv_obj_set_scrollbar_mode(tab, LV_SCROLLBAR_MODE_OFF);
 
     bool wide = lv_disp_get_hor_res(NULL) >= 300;       // portrait (240 px) falls back to the 56 px size
-    const lv_font_t* big = wide ? &font_ehs_108 : &font_ehs_56;
-    const lv_font_t* small = wide ? &font_ehs_64 : &font_ehs_56;
+    // The clock takes the left 60 %, the current weather the rest
+    int W = lv_disp_get_hor_res(NULL);
+    int clockW = W * 60 / 100;
+    const lv_font_t* big = wide ? &font_ehs_64 : &font_ehs_56;
+    const lv_font_t* small = &font_ehs_36;
 
     lv_obj_t* stack = lv_obj_create(tab);
-    lv_obj_set_size(stack, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_size(stack, clockW, LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(stack, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(stack, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_bg_opa(stack, LV_OPA_TRANSP, LV_PART_MAIN);
@@ -87,7 +93,7 @@ void createTripTab(lv_obj_t* tab, lv_obj_t* tabview, int tabIndex, bool isLandsc
     lv_obj_set_style_pad_all(stack, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_row(stack, 2, LV_PART_MAIN);
     lv_obj_clear_flag(stack, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_align(stack, LV_ALIGN_TOP_MID, 0, 2);
+    lv_obj_align(stack, LV_ALIGN_LEFT_MID, 0, -16);
 
     lv_obj_t* row = lv_obj_create(stack);                // hour, colon, minutes: packed, no gaps
     lv_obj_set_size(row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -102,7 +108,7 @@ void createTripTab(lv_obj_t* tab, lv_obj_t* tabview, int tabIndex, bool isLandsc
 
     // The font's colon sits in a full-width cell; a narrow box with the colon centred and allowed to overflow packs it
     lv_obj_t* colon_box = lv_obj_create(row);
-    lv_obj_set_size(colon_box, wide ? 36 : 20, LV_SIZE_CONTENT);
+    lv_obj_set_size(colon_box, 18, LV_SIZE_CONTENT);
     lv_obj_set_style_bg_opa(colon_box, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_style_border_width(colon_box, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_all(colon_box, 0, LV_PART_MAIN);
@@ -116,6 +122,7 @@ void createTripTab(lv_obj_t* tab, lv_obj_t* tabview, int tabIndex, bool isLandsc
     sec_lbl = digits(stack, small, " ");                // the seconds on the next line
 
     createAlarmBar(tab, isLargeScreen);
+    createClockWeatherPanel(tab, clockW, W - clockW, isLargeScreen);
 
     clock_timer = lv_timer_create(clock_tick, 70, nullptr);
 }

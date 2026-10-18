@@ -48,6 +48,9 @@ bool SdCardManager::isMounted() {
 }
 
 void SdCardManager::end() {
+    // The card stays mounted once it is: mounting again later needs a block of memory the screen has long since
+    // broken up (esp_vfs_fat_register then fails with "no memory"). It is mounted at boot, before the screen is built.
+    return;
     SdLock lock;
     if (sdMounted) {
         SD.end();

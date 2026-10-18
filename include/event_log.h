@@ -9,6 +9,7 @@
 
 void eventLogBegin();                          // mount the flash file system, log why the chip (re)started
 void eventLog(const char* fmt, ...) __attribute__((format(printf, 1, 2)));   // thread-safe, printf style
+void eventLogSend(void (*sink)(const char* data, size_t len, void* ctx), void* ctx);   // the log in 512-byte pieces, oldest first
 String eventLogRead();                         // the whole log, oldest first
 void eventLogClear();
 void eventLogHeartbeat();                      // call often; writes a status line about every 10 minutes

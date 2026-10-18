@@ -148,7 +148,8 @@ void setup() {
     }
 
     // Initialize LVGL UI framework
-    initLVGL();
+    initLVGL();                         // takes LVGL's pool (lv_conf.h) while the heap is still in one piece
+    WeatherClient::reserveMemory();     // and the weather parser's 8 KB
 
     // Initialize UI layouts
     initUI();
@@ -319,7 +320,7 @@ static void serialCommands() {
         if (c == 'p') { eventLog("serial: play"); testPlayAlarmSound(false); }
         else if (c == 'b') { eventLog("serial: beep"); audio.setVolume(alarmClock.cfg().volume); audio.playBeep(false); }
         else if (c == 's') { eventLog("serial: stop"); audio.stop(); }
-        else if (c == 'l') { Serial.println("---- log ----"); Serial.print(eventLogRead()); Serial.println("---- end ----"); }
+        else if (c == 'l') { Serial.println("---- log ----"); eventLogSend([](const char* d, size_t n, void*) { Serial.write((const uint8_t*)d, n); }, nullptr); Serial.println("---- end ----"); }
         else if (c == 't') { touchDebug = !touchDebug; Serial.println(touchDebug ? "touch monitor on" : "touch monitor off"); }
         else if (c == 'r') { eventLog("serial: ring"); startAlarmRinging(); }
         else if (c == 'm') { Serial.printf("gpio25 out_sel %u, iomux %08x, rtc dac1 %08x\n", (unsigned)GPIO.func_out_sel_cfg[25].func_sel, (unsigned)READ_PERI_REG(GPIO_PIN_MUX_REG[25]), (unsigned)READ_PERI_REG(RTC_IO_PAD_DAC1_REG)); }

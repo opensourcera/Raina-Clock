@@ -73,6 +73,20 @@ String eventLogRead() {
     return out;
 }
 
+void eventLogSend(void (*sink)(const char* data, size_t len, void* ctx), void* ctx) {
+    if (!fs_ok || !fs_mx) return;
+    xSemaphoreTakeRecursive(fs_mx, portMAX_DELAY);
+    const char* names[2] = {LOG_OLD, LOG_FILE};
+    char buf[512];
+    for (int i = 0; i < 2; i++) {
+        File f = SPIFFS.open(names[i], FILE_READ);
+        if (!f) continue;
+        for (int n; (n = f.read((uint8_t*)buf, sizeof(buf))) > 0; ) sink(buf, (size_t)n, ctx);
+        f.close();
+    }
+    xSemaphoreGiveRecursive(fs_mx);
+}
+
 void eventLogClear() {
     if (!fs_ok || !fs_mx) return;
     xSemaphoreTakeRecursive(fs_mx, portMAX_DELAY);

@@ -98,7 +98,7 @@ extern int getCurrentThemeFlavor();
 //     20 rows → ~12 flushes/frame, ~1.85 ms blocked each
 //     30 rows → ~8 flushes/frame,  ~2.8 ms blocked each (default, sweet spot)
 //     40 rows → ~6 flushes/frame,  ~7 ms blocked each (unresponsive)
-#define DISPLAY_DRAW_BUF_ROWS 30
+#define DISPLAY_DRAW_BUF_ROWS 20
 
 // DISPLAY_REFR_PERIOD_MS: How often LVGL redraws changed areas (milliseconds).
 //   Lower = higher frame rate ceiling but more CPU time spent flushing.

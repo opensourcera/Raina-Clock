@@ -8,13 +8,14 @@ LV_FONT_DECLARE(weather_icons_24);
 static lv_obj_t* menu_tv = nullptr;
 static lv_obj_t* backdrop = nullptr;
 static lv_obj_t* sheet = nullptr;
-static lv_obj_t* items[6] = {nullptr};
+static lv_obj_t* items[4] = {nullptr};
 static bool menu_open = false;
 static int sheet_h = 0, scr_h = 0;
 
-static const char* names[6] = {"Now", "Days", "Hours", "To-do", "Clock", "Setup"};
-static const char* icons[6] = {"\xEF\x80\x8D" /* sun, weather icons */, LV_SYMBOL_LIST, LV_SYMBOL_REFRESH,
-                               LV_SYMBOL_OK, LV_SYMBOL_BELL, LV_SYMBOL_SETTINGS};
+static const int ITEMS = 4;
+static const char* names[ITEMS] = {"Clock", "Weather", "To-do", "Setup"};
+static const int pages[ITEMS] = {4, 1, 3, 5};      // tab index of each (the Weather page lives in the old Days tab)
+static const char* icons[ITEMS] = {LV_SYMBOL_BELL, "\xEF\x80\x8D" /* sun, weather icons */, LV_SYMBOL_OK, LV_SYMBOL_SETTINGS};
 
 static void anim_y(void* o, int32_t v) { lv_obj_set_y((lv_obj_t*)o, v); }
 static void anim_opa(void* o, int32_t v) { lv_obj_set_style_bg_opa((lv_obj_t*)o, (lv_opa_t)v, LV_PART_MAIN); }
@@ -50,8 +51,8 @@ void showSlideMenu() {
     if (!sheet || menu_open) return;
     menu_open = true;
     int cur = (int)lv_tabview_get_tab_act(menu_tv);
-    for (int i = 0; i < 6; i++) {
-        bool on = i == cur;
+    for (int i = 0; i < ITEMS; i++) {
+        bool on = pages[i] == cur;
         lv_obj_set_style_bg_color(items[i], lv_color_hex(on ? 0xcba6f7 : 0x313244), LV_PART_MAIN);
         lv_obj_set_style_text_color(items[i], lv_color_hex(on ? 0x11111b : 0xcdd6f4), LV_PART_MAIN);
     }
@@ -70,7 +71,7 @@ void hideSlideMenu() {
 
 static void item_cb(lv_event_t* e) {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
-    lv_tabview_set_act(menu_tv, i, LV_ANIM_ON);
+    lv_tabview_set_act(menu_tv, pages[i], LV_ANIM_OFF);
     hideSlideMenu();
 }
 static void backdrop_cb(lv_event_t* e) { (void)e; hideSlideMenu(); }
@@ -99,10 +100,10 @@ void createSlideMenu(lv_obj_t* tabview, bool isLargeScreen) {
     int W = lv_disp_get_hor_res(nullptr);
     scr_h = lv_disp_get_ver_res(nullptr);
     bool tall = scr_h > W;
-    int cols = tall ? 2 : 3, rows = tall ? 3 : 2;
+    int cols = tall ? 2 : 4, rows = tall ? 2 : 1;
     int gap = isLargeScreen ? 12 : 8;
     int bw = (W - (cols + 1) * gap) / cols;
-    int bh = isLargeScreen ? 104 : (tall ? 70 : 76);
+    int bh = isLargeScreen ? 110 : (tall ? 90 : 78);
     int top = isLargeScreen ? 22 : 18;                 // room for the grab handle
     sheet_h = top + rows * bh + rows * gap;
 
@@ -140,7 +141,7 @@ void createSlideMenu(lv_obj_t* tabview, bool isLargeScreen) {
     lv_obj_align(grab, LV_ALIGN_TOP_MID, 0, (top - 5) / 2);
 
     const lv_font_t* fname = isLargeScreen ? &lv_font_montserrat_20 : &lv_font_montserrat_14;
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < ITEMS; i++) {
         lv_obj_t* b = lv_btn_create(sheet);
         items[i] = b;
         lv_obj_set_size(b, bw, bh);
@@ -155,13 +156,14 @@ void createSlideMenu(lv_obj_t* tabview, bool isLargeScreen) {
         lv_obj_set_style_pad_row(b, isLargeScreen ? 8 : 4, LV_PART_MAIN);
         lv_obj_t* ic = lv_label_create(b);
         lv_label_set_text(ic, icons[i]);
-        lv_obj_set_style_text_font(ic, i == 0 ? &weather_icons_24 : &lv_font_montserrat_28, LV_PART_MAIN);
+        lv_obj_set_style_text_font(ic, i == 1 ? &weather_icons_24 : &lv_font_montserrat_28, LV_PART_MAIN);
         lv_obj_t* nm = lv_label_create(b);
         lv_label_set_text(nm, names[i]);
         lv_obj_set_style_text_font(nm, fname, LV_PART_MAIN);
         lv_obj_add_event_cb(b, item_cb, LV_EVENT_CLICKED, (void*)(intptr_t)i);
     }
 
+    lv_tabview_set_act(tabview, 4, LV_ANIM_OFF);      // the clock is the home page
     rehook_cb(nullptr);
     lv_timer_create(rehook_cb, 2000, nullptr);
 }

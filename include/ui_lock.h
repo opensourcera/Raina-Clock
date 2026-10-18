@@ -17,4 +17,10 @@ struct UiLock {
     ~UiLock() { xSemaphoreGiveRecursive(uiMutex()); }
 };
 
+// Inside a page handler (which holds the lock once): let the screen run while a long reply goes out
+struct UiUnlock {
+    UiUnlock()  { xSemaphoreGiveRecursive(uiMutex()); }
+    ~UiUnlock() { xSemaphoreTakeRecursive(uiMutex(), portMAX_DELAY); }
+};
+
 #endif // UI_LOCK_H

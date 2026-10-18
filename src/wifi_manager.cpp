@@ -1,3 +1,4 @@
+#include <vector>
 #include "wifi_manager.h"
 #include <Arduino.h>
 #include "settings_manager.h"
@@ -72,13 +73,53 @@ static void configureStaticIP() {
 #endif
 }
 
+// Pages are sent straight from flash in pieces, with each %KEY% filled in on the way: a whole page copied into one
+// String needs a block of memory the size of the page, and the heap rarely has one that big.
+struct TplVars {
+    std::vector<std::pair<String, String>> v;
+    void replace(const char* marker, const String& value) {
+        String k(marker);
+        if (k.length() >= 2 && k[0] == '%' && k[k.length() - 1] == '%') k = k.substring(1, k.length() - 1);
+        v.push_back({k, value});
+    }
+};
+
+static void sendTemplate(WebServer* ws, const char* tpl, const TplVars* vars) {
+    UiUnlock unlocked;                           // the values are collected: the screen need not wait for the network
+    ws->setContentLength(CONTENT_LENGTH_UNKNOWN);
+    ws->send(200, "text/html", "");
+    const char* p = tpl;
+    const char* run = p;                         // start of text not yet sent
+    while (*p) {
+        if (*p == '%' && vars) {
+            const char* q = p + 1;
+            while ((*q >= 'A' && *q <= 'Z') || (*q >= '0' && *q <= '9') || *q == '_') q++;
+            if (*q == '%' && q > p + 1) {
+                String key(p + 1); key.remove(q - p - 1);
+                const String* val = nullptr;
+                for (auto& kv : vars->v) if (kv.first == key) { val = &kv.second; break; }
+                if (val) {
+                    if (p > run) ws->sendContent(run, p - run);
+                    if (val->length()) ws->sendContent(val->c_str(), val->length());
+                    p = q + 1; run = p;
+                    continue;
+                }
+            }
+        }
+        p++;
+        if (p - run >= 1024) { ws->sendContent(run, p - run); run = p; }
+    }
+    if (p > run) ws->sendContent(run, p - run);
+    ws->sendContent("");
+}
+
 WifiManager::WifiManager(const char* ssid, const char* password)
     : _ssid(ssid), _password(password), _state(WIFI_STATE_DISCONNECTED), _lastReconnectAttempt(0), _connectionStartTime(0) {}
 
 void WifiManager::begin() {
     Serial.println("[WiFi] Starting Wi-Fi Manager...");
 #ifndef NATIVE_TEST
-    if (!_webTask) xTaskCreatePinnedToCore([](void* self) { ((WifiManager*)self)->webLoop(); }, "web", 12288, this, 1, &_webTask, 0);
+    if (!_webTask) xTaskCreatePinnedToCore([](void* self) { ((WifiManager*)self)->webLoop(); }, "web", 8192, this, 1, &_webTask, 0);
     WiFi.setAutoReconnect(true);
     WiFi.setTxPower(WIFI_POWER_11dBm);
 
@@ -566,7 +607,13 @@ void WifiManager::startWebServer() {
     }
     _webServer->on("/", [this]() { handleLanding(); });
     _webServer->on("/api/backup", [this]() { _webServer->send(200, "application/json", configBackupStatus()); });
-    _webServer->on("/log", [this]() { _webServer->send(200, "text/plain; charset=utf-8", eventLogRead()); });
+    _webServer->on("/log", [this]() {   // sent in pieces: the whole log as one string needs 30 KB in one block
+        UiUnlock unlocked;
+        _webServer->setContentLength(CONTENT_LENGTH_UNKNOWN);
+        _webServer->send(200, "text/plain; charset=utf-8", "");
+        eventLogSend([](const char* d, size_t n, void* ctx) { ((WebServer*)ctx)->sendContent(d, n); }, _webServer);
+        _webServer->sendContent("");
+    });
     _webServer->on("/api/log/clear", HTTP_POST, [this]() { eventLogClear(); _webServer->send(200, "text/plain", "cleared"); });
     _webServer->on("/reset", [this]() {
         // only with ?confirm=yes: a browser or a phone that merely visits /reset must never wipe the settings
@@ -975,7 +1022,7 @@ void WifiManager::registerOTARoutes() {
 }
 
 void WifiManager::handleSettings() {
-    String html = String(settings_html);
+    TplVars html;
     
 #ifdef APP_VERSION
     html.replace("%APP_VERSION%", APP_VERSION);
@@ -1060,7 +1107,7 @@ void WifiManager::handleSettings() {
     html.replace("%SD_LOGGING%", settings.getSdLoggingEnabled() ? "checked" : "");
     html.replace("%SD_CACHE%", settings.getSdCacheEnabled() ? "checked" : "");
     
-    _webServer->send(200, "text/html", html);
+    sendTemplate(_webServer, settings_html, &html);
 }
 
 void WifiManager::handleSettingsSave() {
@@ -1166,21 +1213,19 @@ void WifiManager::handleSettingsSave() {
 }
 
 void WifiManager::handleAlarm() {
-    String html = alarm_html;
-    _webServer->send(200, "text/html", html);
+    sendTemplate(_webServer, alarm_html, nullptr);
 }
 
 void WifiManager::handleTodo() {
-    String html = todo_html;
-    _webServer->send(200, "text/html", html);
+    sendTemplate(_webServer, todo_html, nullptr);
 }
 
 void WifiManager::handleLanding() {
-    String html = landing_html;
+    TplVars html;
     html.replace("%APP_VERSION%", APP_VERSION);
     html.replace("%DEVICE_NAME%", DEVICE_NAME);
     html.replace("%SCREENSHOT_DISABLED%", settings.getScreenshotServerEnabled() ? "" : "disabled");
     html.replace("%SCREENSHOT_HELP_TEXT%", settings.getScreenshotServerEnabled() ? "" : "<p style='font-size: 13px; color: #a6adc8; margin-top: -5px; margin-bottom: 15px;'>Screenshots must be enabled in device settings.</p>");
-    _webServer->send(200, "text/html", html);
+    sendTemplate(_webServer, landing_html, &html);
 }
 #endif

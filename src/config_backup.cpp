@@ -5,6 +5,7 @@
 #include <ArduinoJson.h>
 #include <string>
 #include <SPIFFS.h>
+#include <lvgl.h>
 
 extern SettingsManager settings;
 
@@ -38,6 +39,8 @@ String configBackupStatus() {   // for the web page: what the copy holds, withou
     DynamicJsonDocument doc(1024), out(512);
     String text = fsReadFile(CONFIG_FILE);
     out["file_bytes"] = text.length();
+    { lv_mem_monitor_t m; lv_mem_monitor(&m); out["lvgl_used_pct"] = m.used_pct; out["lvgl_free"] = m.free_size; out["lvgl_frag_pct"] = m.frag_pct; }
+    out["heap"] = ESP.getFreeHeap(); out["heap_largest"] = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
     out["fs_total"] = SPIFFS.totalBytes(); out["fs_used"] = SPIFFS.usedBytes();
     { File f = SPIFFS.open("/log.txt", "r"); out["log_bytes"] = f ? (int)f.size() : -1; if (f) f.close(); }
     { File f = SPIFFS.open("/log.old", "r"); out["log_old_bytes"] = f ? (int)f.size() : -1; if (f) f.close(); }
