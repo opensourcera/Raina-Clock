@@ -2,6 +2,7 @@
 #include <Preferences.h>
 #include <ArduinoJson.h>
 #include <string>
+#include "event_log.h"
 
 TodoManager todo;
 
@@ -20,10 +21,13 @@ String TodoManager::cleanText(const String& text) {   // trim by hand: the host 
 }
 
 void TodoManager::begin() {
-    Preferences prefs;
-    prefs.begin(TODO_NS, true);
-    String json = prefs.getString(TODO_KEY, "");
-    prefs.end();
+    String json = fsReadFile("/todo.json");
+    if (json.length() == 0) {                       // the first start with this version: take over the old list
+        Preferences prefs;
+        prefs.begin(TODO_NS, true);
+        json = prefs.getString(TODO_KEY, "");
+        prefs.end();
+    }
     _items.clear();
     if (json.length() > 0) fromJson(json);
     _changed = true;
@@ -38,7 +42,8 @@ size_t TodoManager::openCount() const {
 bool TodoManager::add(const String& text) {
     String t = cleanText(text);
     if (t.length() == 0 || _items.size() >= TODO_MAX_ITEMS) return false;
-    _items.push_back({t, false});
+    TodoItem it; it.text = t;
+    _items.push_back(it);
     _changed = true;
     return true;
 }
@@ -87,12 +92,15 @@ void TodoManager::clearAll() {
 }
 
 String TodoManager::toJson() const {
-    DynamicJsonDocument doc(4096);
+    DynamicJsonDocument doc(6144);
+    doc["hide_done"] = _hideDone;
     JsonArray arr = doc.createNestedArray("items");
     for (const auto& it : _items) {
         JsonObject o = arr.createNestedObject();
         o["text"] = it.text.c_str();
         o["done"] = it.done;
+        if (it.urgent) o["urgent"] = true;
+        if (it.day.length()) o["day"] = it.day.c_str();
     }
     std::string out;
     serializeJson(doc, out);
@@ -100,7 +108,7 @@ String TodoManager::toJson() const {
 }
 
 bool TodoManager::fromJson(const String& json) {
-    DynamicJsonDocument doc(4096);
+    DynamicJsonDocument doc(6144);
     if (deserializeJson(doc, json.c_str())) return false;
     JsonArray arr = doc["items"].as<JsonArray>();
     if (arr.isNull()) return false;
@@ -109,18 +117,22 @@ bool TodoManager::fromJson(const String& json) {
         if (fresh.size() >= TODO_MAX_ITEMS) break;
         String t = cleanText(String(o["text"] | ""));
         if (t.length() == 0) continue;
-        fresh.push_back({t, (bool)(o["done"] | false)});
+        TodoItem it;
+        it.text = t;
+        it.done = o["done"] | false;
+        it.urgent = o["urgent"] | false;
+        const char* d = o["day"] | "";
+        if (strlen(d) == 10) it.day = d;
+        fresh.push_back(it);
     }
     _items = fresh;
+    _hideDone = doc["hide_done"] | false;
     _changed = true;
     return true;
 }
 
 void TodoManager::save() {
-    Preferences prefs;
-    prefs.begin(TODO_NS, false);
-    prefs.putString(TODO_KEY, toJson());
-    prefs.end();
+    if (!fsWriteFile("/todo.json", toJson())) eventLog("todo: could not write /todo.json");
 }
 
 bool TodoManager::consumeChanged() {

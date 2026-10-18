@@ -1,18 +1,21 @@
 #ifndef TODO_MANAGER_H
 #define TODO_MANAGER_H
 
-// Local to-do list: kept in NVS (namespace "todo"), edited on the device (tap to tick) and on the web page /todo.
-// No cloud: the list lives on the clock. Up to TODO_MAX_ITEMS items of TODO_MAX_TEXT characters.
+// Local to-do list, kept like a bullet journal: every task belongs to a day, can be marked urgent, and is ticked off
+// when done. Stored in /todo.json on the flash file system (an older list in NVS is taken over once). Edited on the
+// device (tap to tick) and on the phone page /todo. No cloud: the list lives on the clock.
 
 #include <Arduino.h>
 #include <vector>
 
-#define TODO_MAX_ITEMS 24
+#define TODO_MAX_ITEMS 40
 #define TODO_MAX_TEXT 64
 
 struct TodoItem {
     String text;
-    bool done;
+    bool done = false;
+    bool urgent = false;
+    String day;                 // "2026-10-18"; empty: no day (shown every day until done)
 };
 
 class TodoManager {
@@ -30,14 +33,16 @@ public:
     void clearDone();
     void clearAll();
 
-    String toJson() const;                          // {"items":[{"text":"...","done":false}, ...]}
+    bool hideDone() const { return _hideDone; }
+    String toJson() const;                          // {"hide_done":false,"items":[{"text":"...","done":false,"urgent":false,"day":"2026-10-18"}]}
     bool fromJson(const String& json);              // replaces the whole list; false and unchanged on bad JSON
-    void save();                                    // write to NVS
+    void save();                                    // write /todo.json
     bool consumeChanged();                          // true once after a change, for the UI refresh
 
 private:
     std::vector<TodoItem> _items;
     bool _changed = false;
+    bool _hideDone = false;
     static String cleanText(const String& text);
 };
 
