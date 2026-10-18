@@ -29,6 +29,7 @@ extern SettingsManager settings;
 #include "ui_alarm.h"
 #include "ui_menu.h"
 #include "ui_qr.h"
+#include "weather_alert.h"
 #ifndef NATIVE_TEST
 #include "todo_html.h"
 #include "alarm_html.h"
@@ -901,6 +902,7 @@ void WifiManager::startWebServer() {
         String page = _webServer->arg("page");
         if (page == "password") showWifiPasswordPreview(); else if (page == "zip") showZipSetup();
         else if (page == "alarm") showAlarmSetDialog(false); else if (page == "menu") showSlideMenu(); else if (page == "qr") showQrPopup("Raina Clock on your phone", "/"); else if (page == "countdown") showAlarmSetDialog(true); else if (page == "name") { showAlarmSetDialog(false); showAlarmNameWindow(); }
+        else if (page == "wx") weatherAlertDemo(_webServer->hasArg("n") ? _webServer->arg("n").toInt() : -1);
         else { closeWifiSetup(); closeAlarmSetDialog(); hideSlideMenu(); closeQrPopup(); }
         _webServer->send(200, "text/plain", "ok");
     });

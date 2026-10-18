@@ -2,6 +2,7 @@
 #include "ui_alarm.h"
 #include "ui.h"
 #include "ui_weather.h"
+#include "weather_alert.h"
 #include "time_utils.h"
 #include "settings_manager.h"
 
@@ -93,7 +94,7 @@ void createTripTab(lv_obj_t* tab, lv_obj_t* tabview, int tabIndex, bool isLandsc
     lv_obj_set_style_pad_all(stack, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_row(stack, 2, LV_PART_MAIN);
     lv_obj_clear_flag(stack, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_align(stack, LV_ALIGN_LEFT_MID, 0, -16);
+    lv_obj_align(stack, LV_ALIGN_LEFT_MID, 0, isLargeScreen ? -50 : -42);   // room below for the weather message
 
     lv_obj_t* row = lv_obj_create(stack);                // hour, colon, minutes: packed, no gaps
     lv_obj_set_size(row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -123,6 +124,7 @@ void createTripTab(lv_obj_t* tab, lv_obj_t* tabview, int tabIndex, bool isLandsc
 
     createAlarmBar(tab, isLargeScreen);
     createClockWeatherPanel(tab, clockW, W - clockW, isLargeScreen);
+    createWeatherAlert(tab, isLargeScreen);
 
     clock_timer = lv_timer_create(clock_tick, 70, nullptr);
 }

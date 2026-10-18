@@ -158,7 +158,7 @@ static lv_obj_t* winBtn(lv_obj_t* parent, const char* text, lv_event_cb_t cb, ui
 }
 
 static void nameWindowOpen() {
-    if (name_win) return;
+    if (name_win || set_dialog == nullptr) return;
     int W = lv_disp_get_hor_res(nullptr), H = lv_disp_get_ver_res(nullptr);
     name_win = lv_obj_create(lv_layer_top());
     lv_obj_set_size(name_win, W, H);
@@ -170,31 +170,41 @@ static void nameWindowOpen() {
     lv_obj_set_style_pad_all(name_win, 0, LV_PART_MAIN);
     lv_obj_clear_flag(name_win, LV_OBJ_FLAG_SCROLLABLE);
 
-    // The box on top, beside a back arrow; the letters in the middle; Space, Delete and OK on their own row below
-    int th = alarm_large ? 48 : 36, ch = alarm_large ? 58 : 46, gap = 6;
-    int backW = th + 8;
-    winBtn(name_win, LV_SYMBOL_LEFT, [](lv_event_t*) { nameWindowClose(); }, 0x6c7086, 4, 3, backW, th);
+    // Top: back arrow, the name box, delete. Below: three rows of big letter keys; the last ends with Space and Enter.
+    int th = alarm_large ? 48 : 38, gap = 4;
+    int sideW = th + 10;
+    winBtn(name_win, LV_SYMBOL_LEFT, [](lv_event_t*) { nameWindowClose(); }, 0x6c7086, 3, 3, sideW, th);
+    winBtn(name_win, LV_SYMBOL_BACKSPACE, [](lv_event_t*) { if (name_ta) lv_textarea_del_char(name_ta); }, 0xfab387, W - sideW - 3, 3, sideW, th);
     name_ta = lv_textarea_create(name_win);
-    lv_obj_set_size(name_ta, W - backW - 12, th);
-    lv_obj_set_pos(name_ta, backW + 8, 3);
+    lv_obj_set_size(name_ta, W - 2 * sideW - 14, th);
+    lv_obj_set_pos(name_ta, sideW + 7, 3);
     lv_textarea_set_one_line(name_ta, true);
     lv_textarea_set_max_length(name_ta, 20);
     lv_textarea_set_accepted_chars(name_ta, "abcdefghijklmnopqrstuvwxyz ");
-    lv_textarea_set_placeholder_text(name_ta, "Alarm name, e.g. school");
+    lv_textarea_set_placeholder_text(name_ta, "Alarm name");
     lv_textarea_set_text(name_ta, dlg_name.c_str());
     lv_obj_set_style_text_font(name_ta, alarm_large ? &lv_font_montserrat_20 : &lv_font_montserrat_14, LV_PART_MAIN);
     lv_obj_add_state(name_ta, LV_STATE_FOCUSED);        // shows the cursor
+    lv_obj_clear_flag(name_ta, LV_OBJ_FLAG_SCROLL_ON_FOCUS);   // or the top layer scrolls and the window slides up
+    // The window belongs to the Set popup: should that go by any other way, the window goes too
+    lv_timer_t* guard = lv_timer_create([](lv_timer_t*) { if (set_dialog == nullptr) nameWindowClose(); }, 500, nullptr);
+    lv_obj_add_event_cb(name_win, [](lv_event_t* e) { lv_timer_del((lv_timer_t*)lv_event_get_user_data(e)); }, LV_EVENT_DELETE, guard);
 
-    static const char* letters[] = {"q","w","e","r","t","y","u","i","o","p","\n","a","s","d","f","g","h","j","k","l","\n","z","x","c","v","b","n","m",""};
-    static lv_btnmatrix_ctrl_t ctrl[28];
-    for (int i = 0; i < 28; i++) ctrl[i] = (lv_btnmatrix_ctrl_t)1;
-    int ky = th + 3 + gap, kh = H - ky - ch - 2 * gap;
-    lv_obj_t* kb = lv_keyboard_create(name_win);
-    lv_obj_set_size(kb, W, kh);
-    lv_obj_align(kb, LV_ALIGN_TOP_LEFT, 0, ky);       // lv_keyboard_create aligns it to the bottom
-    lv_keyboard_set_map(kb, LV_KEYBOARD_MODE_USER_1, letters, ctrl);
-    lv_keyboard_set_mode(kb, LV_KEYBOARD_MODE_USER_1);
+    // Widths in units: a letter is 2, Space and Enter 3, so the last row lines up with the others. Space is the blank key.
+    static const char* letters[] = {"q","w","e","r","t","y","u","i","o","p","\n","a","s","d","f","g","h","j","k","l","\n",
+                                    "z","x","c","v","b","n","m"," ",LV_SYMBOL_OK,""};
+    static lv_btnmatrix_ctrl_t ctrl[29];
+    for (int i = 0; i < 29; i++) ctrl[i] = (lv_btnmatrix_ctrl_t)2;
+    ctrl[26] = (lv_btnmatrix_ctrl_t)3;
+    ctrl[27] = (lv_btnmatrix_ctrl_t)(3 | LV_BTNMATRIX_CTRL_CHECKED);   // Enter, drawn green
+    int ky = th + 3 + gap;
+    lv_obj_t* kb = lv_btnmatrix_create(name_win);
+    lv_btnmatrix_set_map(kb, letters);
+    lv_btnmatrix_set_ctrl_map(kb, ctrl);
+    lv_obj_set_pos(kb, 0, ky);
+    lv_obj_set_size(kb, W, H - ky);
     lv_obj_set_style_bg_color(kb, lv_color_hex(0x11111b), LV_PART_MAIN);
+    lv_obj_set_style_radius(kb, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_all(kb, 3, LV_PART_MAIN);
     lv_obj_set_style_pad_gap(kb, 4, LV_PART_MAIN);
     lv_obj_set_style_border_width(kb, 0, LV_PART_MAIN);
@@ -202,20 +212,27 @@ static void nameWindowOpen() {
     lv_obj_set_style_text_color(kb, lv_color_hex(0xcdd6f4), LV_PART_ITEMS);
     lv_obj_set_style_text_font(kb, alarm_large ? &lv_font_montserrat_28 : &lv_font_montserrat_20, LV_PART_ITEMS);
     lv_obj_set_style_radius(kb, 8, LV_PART_ITEMS);
+    lv_obj_set_style_shadow_width(kb, 0, LV_PART_ITEMS);
+    lv_obj_set_style_border_width(kb, 0, LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(kb, lv_color_hex(0xa6e3a1), LV_PART_ITEMS | LV_STATE_CHECKED);
+    lv_obj_set_style_text_color(kb, lv_color_hex(0x11111b), LV_PART_ITEMS | LV_STATE_CHECKED);
     lv_obj_set_style_bg_color(kb, lv_color_hex(0xfab387), LV_PART_ITEMS | LV_STATE_PRESSED);
     lv_obj_set_style_text_color(kb, lv_color_hex(0x11111b), LV_PART_ITEMS | LV_STATE_PRESSED);
-    lv_keyboard_set_textarea(kb, name_ta);
-
-    // Space (wide), Delete, then OK set apart from Delete so a tap on one never lands on the other
-    int cy = H - ch - gap, gapS = 8, gapOk = 22;
-    int bw = (W - 8 - gapS - gapOk) / 6;
-    winBtn(name_win, "Space", [](lv_event_t*) { if (name_ta) lv_textarea_add_char(name_ta, ' '); }, 0xcdd6f4, 4, cy, bw * 3, ch);
-    winBtn(name_win, LV_SYMBOL_BACKSPACE, [](lv_event_t*) { if (name_ta) lv_textarea_del_char(name_ta); }, 0xfab387, 4 + bw * 3 + gapS, cy, bw, ch);
-    winBtn(name_win, LV_SYMBOL_OK, [](lv_event_t*) {
-        if (name_ta) { dlg_name = String(lv_textarea_get_text(name_ta)); dlg_name.trim(); }
-        nameButtonText();
-        nameWindowClose();
-    }, 0xa6e3a1, 4 + bw * 4 + gapS + gapOk, cy, bw * 2, ch);
+    lv_obj_add_event_cb(kb, [](lv_event_t* e) {
+        lv_obj_t* m = lv_event_get_target(e);
+        uint16_t id = lv_btnmatrix_get_selected_btn(m);
+        if (id == LV_BTNMATRIX_BTN_NONE || name_ta == nullptr) return;
+        const char* t = lv_btnmatrix_get_btn_text(m, id);
+        if (t == nullptr) return;
+        if (strcmp(t, LV_SYMBOL_OK) == 0) {
+            dlg_name = String(lv_textarea_get_text(name_ta));
+            dlg_name.trim();
+            nameButtonText();
+            nameWindowClose();
+        } else {
+            lv_textarea_add_char(name_ta, t[0]);          // a letter, or the blank key's space
+        }
+    }, LV_EVENT_VALUE_CHANGED, nullptr);
 }
 
 static void name_cb(lv_event_t* e) { (void)e; nameWindowOpen(); }

@@ -3,6 +3,7 @@
 #include "settings_manager.h"
 #include "time_utils.h"
 #include "ui.h"
+#include "weather_alert.h"
 
 extern SettingsManager settings;
 
@@ -84,9 +85,9 @@ void createClockWeatherPanel(lv_obj_t* tab, int x, int w, bool isLargeScreen) {
     lv_obj_set_style_bg_opa(p, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_style_border_width(p, 0, LV_PART_MAIN);
     lv_obj_set_style_pad_all(p, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_row(p, isLargeScreen ? 10 : 6, LV_PART_MAIN);
+    lv_obj_set_style_pad_row(p, 0, LV_PART_MAIN);
     lv_obj_clear_flag(p, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_align(p, LV_ALIGN_LEFT_MID, x, -16);
+    lv_obj_align(p, LV_ALIGN_LEFT_MID, x, isLargeScreen ? -56 : -48);
     now_icon = label(p, &weather_icons_72, TEXT, "");
     now_temp = label(p, isLargeScreen ? &lv_font_montserrat_48 : &lv_font_montserrat_28, 0xfab387, "--");
 }
@@ -115,6 +116,7 @@ void weatherPanelsUpdate(const WeatherData& data) {
         deg(b, sizeof(b), data.temperature); lv_label_set_text(now_temp, b);
     }
     setHeaderCity(data.cityName.c_str());
+    weatherAlertUpdate(data);
     if (!have_page) return;
 
     for (int i = 0; i < HOUR_CARDS; i++) {
