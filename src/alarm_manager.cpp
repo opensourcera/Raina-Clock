@@ -1,4 +1,5 @@
 #include "alarm_manager.h"
+#include "config_backup.h"
 #include <Preferences.h>
 #include <ArduinoJson.h>
 #include <string>
@@ -32,6 +33,7 @@ void AlarmManager::save() {
     prefs.putInt("vol", _c.volume);
     prefs.putString("song", _c.song);
     prefs.end();
+    configBackupSave();
 }
 
 void AlarmManager::setTime(int hour, int minute, bool repeat) {

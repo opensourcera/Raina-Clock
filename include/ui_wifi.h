@@ -9,6 +9,8 @@ void showWifiSetup();                                    // full-screen overlay
 void showZipSetup();                                     // the zip code page only
 lv_obj_t* createZipSettingsButton(lv_obj_t* parent, bool isLargeScreen);
 bool isWifiSetupShown();
+void showWifiPasswordPreview();                          // the password page only, no scan (layout check over the API)
+void closeWifiSetup();
 lv_obj_t* createWifiSettingsButton(lv_obj_t* parent, bool isLargeScreen);   // a row for the Settings tab
 void refreshWifiSettingsButton();
 

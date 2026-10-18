@@ -22,6 +22,9 @@
 extern SettingsManager settings;
 #include "todo_manager.h"
 #include "alarm_manager.h"
+#include "event_log.h"
+#include "config_backup.h"
+#include "ui_wifi.h"
 #include "ui_alarm.h"
 #ifndef NATIVE_TEST
 #include "todo_html.h"
@@ -551,7 +554,13 @@ void WifiManager::startWebServer() {
         Serial.println("[mDNS] Error setting up MDNS responder!");
     }
     _webServer->on("/", [this]() { handleLanding(); });
+    _webServer->on("/api/backup", [this]() { _webServer->send(200, "application/json", configBackupStatus()); });
+    _webServer->on("/log", [this]() { _webServer->send(200, "text/plain; charset=utf-8", eventLogRead()); });
+    _webServer->on("/api/log/clear", HTTP_POST, [this]() { eventLogClear(); _webServer->send(200, "text/plain", "cleared"); });
     _webServer->on("/reset", [this]() {
+        // only with ?confirm=yes: a browser or a phone that merely visits /reset must never wipe the settings
+        if (_webServer->arg("confirm") != "yes") { _webServer->sendHeader("Location", "/"); _webServer->send(302, "text/plain", ""); return; }
+        eventLog("factory reset from the web page");
         settings.factoryReset();
         WiFi.disconnect(true, true);
         String html = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">";
@@ -659,9 +668,11 @@ void WifiManager::startWebServer() {
         String song = alarmClock.cfg().song; int vol = alarmClock.cfg().volume;
         if (_webServer->hasArg("plain")) { DynamicJsonDocument d(256); if (!deserializeJson(d, _webServer->arg("plain"))) { if (d.containsKey("song")) song = String(d["song"].as<const char*>()); if (d.containsKey("volume")) vol = d["volume"].as<int>(); } }
         audio.setVolume(vol);
-        bool file = audio.playFile(String(AudioPlayer::musicDir()) + "/" + song, false);
-        if (!file) audio.playBuiltin(false);
-        _webServer->send(200, "text/plain", file ? "Playing " + song : "File not on the card: playing the built-in tune");
+        eventLog("web: test sound %s", song.c_str());
+        bool beep = song == "beep";
+        bool file = !beep && audio.playFile(String(AudioPlayer::musicDir()) + "/" + song, false);
+        if (!file) audio.playBeep(false);   // the beep needs no card and no decoder
+        _webServer->send(200, "text/plain", file ? "Playing " + song : (beep ? String("Playing the beep") : String("File not on the card: playing the beep")));
     });
     _webServer->on("/api/alarm/stop", HTTP_POST, [this]() {
         if (alarmClock.isRinging()) alarmRingingStopNow(); else audio.stop();   // dismiss a ringing alarm, or just end a test sound
@@ -826,6 +837,12 @@ void WifiManager::startWebServer() {
         } else {
             _webServer->send(400, "text/plain", "Missing index parameter");
         }
+    });
+    _webServer->on("/api/ui/wifi", [this]() {
+        if (!settings.getApiServerEnabled()) { _webServer->send(403, "text/plain", "Forbidden: API server disabled in settings"); return; }
+        String page = _webServer->arg("page");
+        if (page == "password") showWifiPasswordPreview(); else if (page == "zip") showZipSetup(); else closeWifiSetup();
+        _webServer->send(200, "text/plain", "ok");
     });
     _webServer->on("/api/settings_tab", [this]() {
         if (!settings.getApiServerEnabled()) { _webServer->send(403, "text/plain", "Forbidden: API server disabled in settings"); return; }

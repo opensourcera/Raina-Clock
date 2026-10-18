@@ -34,6 +34,8 @@ bool WeatherClient::geocodeZip() {
 
     WiFiClient client;
     HTTPClient http;
+    http.setConnectTimeout(3000);   // a dead network must not freeze the clock for long
+    http.setTimeout(4000);
 
     String url = "http://geocoding-api.open-meteo.com/v1/search?name=";
     url += _zipCode;
@@ -85,6 +87,8 @@ bool WeatherClient::reverseGeocode() {
 
     WiFiClient client;
     HTTPClient http;
+    http.setConnectTimeout(3000);   // a dead network must not freeze the clock for long
+    http.setTimeout(4000);
 
     // Nominatim reverse geocoding — free, no API key required.
     // Policy: include a descriptive User-Agent (required by Nominatim ToS).
@@ -188,6 +192,8 @@ WeatherData WeatherClient::fetchWeather() {
 
     WiFiClient client;
     HTTPClient http;
+    http.setConnectTimeout(3000);   // a dead network must not freeze the clock for long
+    http.setTimeout(4000);
 
     String url;
     if (useOWM) {
@@ -777,6 +783,8 @@ bool WeatherClient::fetchIpLocation(String& latStr, String& lonStr, String& city
 
     WiFiClient client;
     HTTPClient http;
+    http.setConnectTimeout(3000);   // a dead network must not freeze the clock for long
+    http.setTimeout(4000);
 
     String url = "http://ip-api.com/json/";
     Serial.print("[Weather] Fetching IP Geolocation URL: ");

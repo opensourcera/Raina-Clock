@@ -3,6 +3,9 @@
 #include "alarm_manager.h"
 #include "ui_wifi.h"
 #include "audio_player.h"
+#include "event_log.h"
+#include "config_backup.h"
+#include <esp_task_wdt.h>
 #include "ui_alarm.h"
 #include "time_utils.h"
 #include <Arduino.h>
@@ -70,6 +73,7 @@ bool pending_ui_sync = false;
 
 // --- Wi-Fi Event Handlers ---
 void onWiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
+    eventLog("wifi: connected, ip %s", WiFi.localIP().toString().c_str());
     if (settings.getMqttEnabled()) {
         Serial.println("[System] Wi-Fi connected with IP! Signaling MQTT Manager...");
         mqtt.onNetworkAvailable();
@@ -79,6 +83,7 @@ void onWiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
 }
 
 void onWiFiDisconnect(WiFiEvent_t event, WiFiEventInfo_t info) {
+    eventLog("wifi: disconnected (reason %d)", (int)info.wifi_sta_disconnected.reason);
     Serial.println("[System] Wi-Fi disconnected! Signaling MQTT Manager...");
     mqtt.onNetworkDisconnected();
 }
@@ -86,6 +91,7 @@ void onWiFiDisconnect(WiFiEvent_t event, WiFiEventInfo_t info) {
 void setup() {
     Serial.begin(115200);
     Serial.println("[System] Booting ESP32 CYD Alarm Clock...");
+    eventLogBegin();
 
     dht22.begin();
     dht11.begin();
@@ -118,6 +124,7 @@ void setup() {
     settings.begin();
     todo.begin();
     alarmClock.begin();
+    configBackupRestore();   // the preferences store was empty? bring Wi-Fi, zip and alarm back from /config.json
     screensaver.setTimeoutMs(settings.getScreensaverTimeout());
 
     // Check if SD card is present by attempting a begin/mount
@@ -275,7 +282,50 @@ void setup() {
     buttonManager.begin();
 }
 
+// Names the part of the loop that is running; the next STAGE reports any part that took over 2 s, so a stall
+// (a network call, a sensor read) shows up in the log with its name.
+static const char* g_stage = "start";
+static uint32_t g_stageT = 0;
+#define STAGE(name) do { uint32_t n_ = millis(); if (n_ - g_stageT > 2000 && g_stageT != 0) eventLog("slow: %s took %lu ms", g_stage, (unsigned long)(n_ - g_stageT)); g_stage = name; g_stageT = n_; } while (0)
+
+// A watcher on the other core: when the main loop stays inside one stage for 8 s or more it says so, with the name of
+// the stage, every 8 s. That is what tells a long network call from a real hang.
+static void watcherTask(void*) {
+    uint32_t reported = 0;
+    for (;;) {
+        vTaskDelay(pdMS_TO_TICKS(2000));
+        uint32_t t = g_stageT;
+        if (t != 0 && millis() - t >= 8000 && t != reported) {
+            reported = t;
+            Serial.printf("[watch] main loop has been in '%s' for %lu s (heap %u)\n", g_stage, (unsigned long)((millis() - t) / 1000), (unsigned)ESP.getFreeHeap());
+            eventLog("STUCK? main loop in '%s' for %lu s", g_stage, (unsigned long)((millis() - t) / 1000));
+        } else if (t != reported && millis() - t < 8000) {
+            reported = 0;
+        }
+    }
+}
+
+static void serialCommands() {
+    // Bench tests over USB: p = play the alarm song, b = beep, s = stop, l = print the log, h = heap
+    while (Serial.available()) {
+        int c = Serial.read();
+        if (c == 'p') { eventLog("serial: play"); testPlayAlarmSound(false); }
+        else if (c == 'b') { eventLog("serial: beep"); audio.setVolume(alarmClock.cfg().volume); audio.playBeep(false); }
+        else if (c == 's') { eventLog("serial: stop"); audio.stop(); }
+        else if (c == 'l') { Serial.println("---- log ----"); Serial.print(eventLogRead()); Serial.println("---- end ----"); }
+        else if (c == 'h') { Serial.printf("heap %u, lowest %u, largest %u\n", (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMinFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)); }
+    }
+}
+
 void loop() {
+    STAGE("loop top");
+    {
+        static bool wdt_armed = false;   // armed on the first pass, once start-up work is over
+        if (!wdt_armed) { wdt_armed = true; esp_task_wdt_init(60, true); esp_task_wdt_add(NULL); eventLog("watchdog armed: 60 s"); xTaskCreatePinnedToCore(watcherTask, "watch", 4096, nullptr, 1, nullptr, 0); }
+        esp_task_wdt_reset();            // the watchdog restarts the clock if this loop ever stops for a minute
+    }
+    eventLogHeartbeat();
+    serialCommands();
     if (pending_ui_sync) {
         pending_ui_sync = false;
         ui_sync_toggles();
@@ -291,6 +341,7 @@ void loop() {
         }
     }
 
+    STAGE("lvgl");
     // Periodically call LVGL task handler
     lv_timer_handler();
 
@@ -298,10 +349,12 @@ void loop() {
     delay(5);
     lv_tick_inc(5);
 
+    STAGE("wifi.update");
     wifi.update();
 
     unsigned long currentMillis = millis();
 
+    STAGE("sleep schedule");
     // Sleep Schedule Logic
     static unsigned long lastSleepCheck = 0;
     if (currentMillis - lastSleepCheck >= 60000) {
@@ -345,6 +398,7 @@ void loop() {
     led.update(currentMillis);
 #endif
 
+    STAGE("local sensor");
     // Periodically read Local Sensor if enabled
     if (settings.getLocalSensorEnabled()) {
         unsigned long currentUpdateIntervalMs = settings.getLocalSensorUpdateInterval() * 1000UL;
@@ -427,6 +481,7 @@ void loop() {
         }
     }
 
+    STAGE("button");
     // Handle physical BOOT button events
     static bool ignoreButtonAction = false;
     static bool lastRawButtonState = HIGH;
@@ -483,6 +538,7 @@ void loop() {
         ScreenshotManager::captureToSD(filename.c_str());
     }
 
+    STAGE("settings changes");
     // Handle runtime settings changes from UI
     if (settings_unit_changed) {
         settings_unit_changed = false;
@@ -617,6 +673,7 @@ void loop() {
     }
 #endif
 
+    STAGE("weather and time");
     // Periodically update Wi-Fi Connection Manager and fetch weather/time
     if (currentMillis - lastWifiUpdate >= wifiUpdateInterval) {
         lastWifiUpdate = currentMillis;
@@ -680,7 +737,7 @@ void loop() {
 
             // Check for weather updates
             unsigned long currentUpdateInterval = settings.getWeatherUpdateInterval() * 60 * 1000UL;
-            if (!hasInitialFetch || (currentMillis - lastWeatherUpdate >= currentUpdateInterval)) {
+            if ((!hasInitialFetch || (currentMillis - lastWeatherUpdate >= currentUpdateInterval)) && !audio.isPlaying() && !isAlarmRingingShown()) {   // never while the alarm sounds: the fetch blocks the loop for seconds
                 if (weather.isLocationEmpty()) {
                     Serial.println("[System] Location settings empty/default. Querying IP location fallback...");
                     String latStr, lonStr, city;

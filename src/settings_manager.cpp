@@ -1,3 +1,4 @@
+#include "config_backup.h"
 #include "settings_manager.h"
 #include <Preferences.h>
 #include "config/config.h"
@@ -180,6 +181,7 @@ void SettingsManager::setTimezone(const String& timezone) {
         prefs.begin("settings", false);
         prefs.putString("tz", _timezone);
         prefs.end();
+        configBackupSave();
     }
 }
 
@@ -211,6 +213,7 @@ void SettingsManager::setWifiSSID(const String& ssid) {
         prefs.begin("settings", false);
         prefs.putString("wifi_ssid", _wifiSSID);
         prefs.end();
+        configBackupSave();
     }
 }
 
@@ -225,6 +228,7 @@ void SettingsManager::setWifiPassword(const String& password) {
         prefs.begin("settings", false);
         prefs.putString("wifi_pass", _wifiPassword);
         prefs.end();
+        configBackupSave();
     }
 }
 
@@ -385,6 +389,7 @@ void SettingsManager::setZipCode(const String& zipCode) {
         prefs.begin("settings", false);
         prefs.putString("zip", _zipCode);
         prefs.end();
+        configBackupSave();
     }
 }
 

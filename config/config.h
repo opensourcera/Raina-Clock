@@ -18,7 +18,7 @@
 #define WEATHER_CITY_CODE ""
 
 // Open-Meteo API Settings
-#define WEATHER_UPDATE_INTERVAL_MINS 1
+#define WEATHER_UPDATE_INTERVAL_MINS 15
 
 // NTP and Timezone Settings
 // Note: We use POSIX strings for efficiency to avoid bundling a giant tzdata lookup table.

@@ -1484,7 +1484,7 @@ void initUI() {
     }
     lv_obj_add_event_cb(ui_auto_bright_sw, auto_sw_event_cb, LV_EVENT_VALUE_CHANGED, ui_brightness_slider);
 
-    flush_settings(0);
+    flush_settings(2);   // the time zone lives on the Disp page: the Net page is full
     // Timezone label
     lv_obj_t * tz_label = lv_label_create(right_col);
     lv_label_set_text(tz_label, "Timezone");

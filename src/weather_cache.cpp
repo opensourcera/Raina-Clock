@@ -4,6 +4,7 @@
 #include <FS.h>
 
 bool WeatherCache::saveCache(const WeatherData& data) {
+    SdLock lock;   // the audio player may be reading the card
     bool wasMounted = SdCardManager::isMounted();
     if (!wasMounted) {
         if (!SdCardManager::begin()) {
@@ -43,6 +44,7 @@ bool WeatherCache::saveCache(const WeatherData& data) {
 }
 
 bool WeatherCache::loadCache(WeatherData& data) {
+    SdLock lock;   // the audio player may be reading the card
     bool wasMounted = SdCardManager::isMounted();
     if (!wasMounted) {
         if (!SdCardManager::begin()) {
@@ -85,6 +87,7 @@ bool WeatherCache::loadCache(WeatherData& data) {
 }
 
 bool WeatherCache::clearCache() {
+    SdLock lock;   // the audio player may be reading the card
     bool wasMounted = SdCardManager::isMounted();
     if (!wasMounted) {
         if (!SdCardManager::begin()) {

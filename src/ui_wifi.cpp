@@ -231,11 +231,12 @@ static void connect_now() {
 static void pagePassword(const String& ssid) {
     clearPage();
     int w = lv_obj_get_width(overlay), h = lv_obj_get_height(overlay);
-    int th = large ? 48 : 36, ch = large ? 52 : 42, gap = 4;
+    int th = large ? 48 : 36, ch = large ? 58 : 46, gap = 6;
     int eyeW = th + 8;                                   // the eye sits at the top right, next to the input box
+    int backW = th + 8;                                  // the back arrow sits at the top left
     ta = lv_textarea_create(overlay);
-    lv_obj_set_size(ta, w - 8 - eyeW - 4, th);
-    lv_obj_align(ta, LV_ALIGN_TOP_LEFT, 4, 3);
+    lv_obj_set_size(ta, w - 12 - eyeW - backW - 8, th);
+    lv_obj_align(ta, LV_ALIGN_TOP_LEFT, 4 + backW + 4, 3);
     lv_textarea_set_one_line(ta, true);
     lv_textarea_set_password_mode(ta, true);
     lv_textarea_set_max_length(ta, 63);
@@ -249,30 +250,32 @@ static void pagePassword(const String& ssid) {
         lv_label_set_text(lv_obj_get_child(lv_event_get_target(e), 0), hide ? LV_SYMBOL_EYE_OPEN : LV_SYMBOL_EYE_CLOSE);
     }, 0x94e2d5, eyeW, th);
     lv_obj_align(eye, LV_ALIGN_TOP_RIGHT, -4, 3);
+    lv_obj_t* back = button(overlay, LV_SYMBOL_LEFT, [](lv_event_t*) { pageList(); }, 0x6c7086, backW, th);
+    lv_obj_align(back, LV_ALIGN_TOP_LEFT, 4, 3);
 
     int ky = th + 3 + gap, kh = h - ky - ch - 2 * gap;
     make_keyboard(0, ky, w, kh, false);
 
-    // The control row, every key the same size: Aa, 123, Space (double), Del, X, OK
-    int cy = h - ch - gap, bw = (w - 8 - 6 * 3) / 7;
+    // The control row: Aa, 123, Space (double), Del, then a wide OK set apart from Del so that a tap on Del never lands on OK
+    int cy = h - ch - gap, gapS = 8, gapOk = 22;
+    int bw = (w - 8 - 3 * gapS - gapOk) / 7;
     int x = 4;
-    auto add = [&](const char* txt, lv_event_cb_t cb, uint32_t col, int units) {
-        int bwidth = bw * units + 3 * (units - 1);
+    auto add = [&](const char* txt, lv_event_cb_t cb, uint32_t col, int units, int gapAfter) {
+        int bwidth = bw * units;
         lv_obj_t* b = button(overlay, txt, cb, col, bwidth, ch);
         lv_obj_set_pos(b, x, cy);
-        x += bwidth + 3;
+        x += bwidth + gapAfter;
         return b;
     };
-    add("Aa", [](lv_event_t*) { kb_show_page(kb_page == 0 ? 1 : 0); }, 0x89b4fa, 1);
+    add("Aa", [](lv_event_t*) { kb_show_page(kb_page == 0 ? 1 : 0); }, 0x89b4fa, 1, gapS);
     add("123", [](lv_event_t* e) {
         int next = kb_page == 2 ? 3 : (kb_page == 3 ? 0 : 2);
         kb_show_page(next);
         lv_label_set_text(lv_obj_get_child(lv_event_get_target(e), 0), next == 0 ? "123" : (next == 2 ? "#+=" : "abc"));
-    }, 0xf9e2af, 1);
-    add("Space", [](lv_event_t*) { lv_textarea_add_char(ta, ' '); }, 0xcdd6f4, 2);
-    add(LV_SYMBOL_BACKSPACE, [](lv_event_t*) { lv_textarea_del_char(ta); }, 0xfab387, 1);
-    add(LV_SYMBOL_CLOSE, [](lv_event_t*) { pageList(); }, 0xf38ba8, 1);
-    add(LV_SYMBOL_OK, [](lv_event_t*) { connect_now(); }, 0xa6e3a1, 1);
+    }, 0xf9e2af, 1, gapS);
+    add("Space", [](lv_event_t*) { lv_textarea_add_char(ta, ' '); }, 0xcdd6f4, 2, gapS);
+    add(LV_SYMBOL_BACKSPACE, [](lv_event_t*) { lv_textarea_del_char(ta); }, 0xfab387, 1, gapOk);
+    add(LV_SYMBOL_OK, [](lv_event_t*) { connect_now(); }, 0xa6e3a1, 2, 0);
 }
 
 // ---- page 3: the zip code for the weather
@@ -280,7 +283,7 @@ static void pagePassword(const String& ssid) {
 static void pageZip() {
     clearPage();
     int w = lv_obj_get_width(overlay), h = lv_obj_get_height(overlay);
-    int th = large ? 48 : 36, ch = large ? 52 : 42, gap = 4;
+    int th = large ? 48 : 36, ch = large ? 58 : 46, gap = 6;
     ta = lv_textarea_create(overlay);
     lv_obj_set_size(ta, w - 8, th);
     lv_obj_align(ta, LV_ALIGN_TOP_MID, 0, 3);
@@ -293,23 +296,23 @@ static void pageZip() {
     int ky = th + 3 + gap, kh = h - ky - ch - 2 * gap;
     make_keyboard(0, ky, w, kh, true);
 
-    int cy = h - ch - gap, bw = (w - 8 - 2 * 3) / 3;
+    int cy = h - ch - gap, gapS = 8, gapOk = 22;
+    int bw = (w - 8 - gapS - gapOk) / 4;
+    lv_obj_t* cancel = button(overlay, LV_SYMBOL_LEFT, [](lv_event_t*) { if (zip_only) closeAll(); else pageList(); }, 0x6c7086, bw, ch);
+    lv_obj_set_pos(cancel, 4, cy);
     lv_obj_t* del = button(overlay, LV_SYMBOL_BACKSPACE, [](lv_event_t*) { lv_textarea_del_char(ta); }, 0xfab387, bw, ch);
-    lv_obj_set_pos(del, 4, cy);
-    lv_obj_t* cancel = button(overlay, LV_SYMBOL_CLOSE, [](lv_event_t*) { if (zip_only) closeAll(); else pageList(); }, 0xf38ba8, bw, ch);
-    lv_obj_set_pos(cancel, 4 + bw + 3, cy);
+    lv_obj_set_pos(del, 4 + bw + gapS, cy);
     lv_obj_t* ok = button(overlay, LV_SYMBOL_OK, [](lv_event_t*) {
         String zip = String(lv_textarea_get_text(ta));
         if (zip.length() >= 3) { settings.setZipCode(zip); settings.setCityCode(""); }
         if (zip_only) closeAll(); else pageList();
-    }, 0xa6e3a1, bw, ch);
-    lv_obj_set_pos(ok, 4 + 2 * (bw + 3), cy);
+    }, 0xa6e3a1, bw * 2, ch);
+    lv_obj_set_pos(ok, 4 + 2 * bw + gapS + gapOk, cy);
 }
 
 // ---- entry points
 
-void showWifiSetup() {
-    if (overlay) return;
+static void makeOverlay() {
     zip_only = false;
     large = (lv_disp_get_hor_res(NULL) >= 480 || lv_disp_get_ver_res(NULL) >= 480);
     overlay = lv_obj_create(lv_layer_top());
@@ -321,8 +324,22 @@ void showWifiSetup() {
     lv_obj_set_style_pad_all(overlay, 0, LV_PART_MAIN);
     lv_obj_clear_flag(overlay, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_update_layout(overlay);
+}
+
+void showWifiSetup() {
+    if (overlay) return;
+    makeOverlay();
     pageList();
 }
+
+// The password page without scanning, so the layout can be checked from the web API (/api/ui/wifi?page=password)
+void showWifiPasswordPreview() {
+    if (overlay) return;
+    makeOverlay();
+    pagePassword("Preview");
+}
+
+void closeWifiSetup() { if (overlay) closeAll(); }
 
 bool isWifiSetupShown() { return overlay != nullptr; }
 

@@ -32,6 +32,7 @@ p.subtitle { color: #a6adc8; margin-top: 0; margin-bottom: 30px; font-size: 15px
 <p class='subtitle'>Version %APP_VERSION%</p>
 
 <a href="/alarm" class="btn btn-settings">⏰ Alarm & Music</a>
+<a href="/log" class="btn btn-settings">Event Log</a>
 <a href="/todo" class="btn btn-settings">✅ To-do List</a>
 <a href="/settings" class="btn btn-settings">⚙️ Device Settings</a>
 <a href="/update" class="btn btn-update">🔄 Firmware Update</a>
@@ -39,7 +40,7 @@ p.subtitle { color: #a6adc8; margin-top: 0; margin-bottom: 30px; font-size: 15px
 %SCREENSHOT_HELP_TEXT%
 <a href="/clear_logs" class="btn btn-update" style="background: #fab387; color: #11111b;" onclick="return confirm('Are you sure you want to clear the SD card logs?');">🗑️ Clear SD Logs</a>
 <a href="/clear_cache" class="btn btn-update" style="background: #fab387; color: #11111b;" onclick="return confirm('Are you sure you want to clear the SD card cache?');">🗑️ Clear SD Cache</a>
-<a href="/reset" class="btn btn-reset" onclick="return confirm('Are you sure you want to factory reset this device? All settings and Wi-Fi credentials will be erased and the device will restart in AP Setup mode. This cannot be undone.');">⚠️ Factory Reset</a>
+<a href="/reset?confirm=yes" class="btn btn-reset" onclick="return confirm('Are you sure you want to factory reset this device? All settings and Wi-Fi credentials will be erased and the device will restart in AP Setup mode. This cannot be undone.');">⚠️ Factory Reset</a>
 
 <p style="margin-top: 25px; font-size: 13px; color: #6c7086;">Built for %DEVICE_NAME% | <a href="https://github.com/nicholaswilde/cyd-weather-station" target="_blank" style="color: #89b4fa; text-decoration: none;">GitHub</a></p>
 </div>

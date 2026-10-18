@@ -1,6 +1,7 @@
 #include "ui_alarm.h"
 #include "alarm_manager.h"
 #include "audio_player.h"
+#include "event_log.h"
 #include "settings_manager.h"
 #include "screensaver_manager.h"
 #include "time_utils.h"
@@ -36,7 +37,11 @@ static void ringTimeNow() {
     lv_obj_align(ring_time, LV_ALIGN_CENTER, 0, -34);
 }
 
+static int auto_snoozes = 0;       // times in a row the alarm snoozed itself because nobody answered
+
 static void ringingStop() {
+    eventLog("alarm: stopped");
+    auto_snoozes = 0;
     audio.stop();
     alarmClock.stop();
     hideAlarmRinging();
@@ -45,6 +50,7 @@ static void ringingStop() {
 
 static void ringingSnooze() {
     struct tm now;
+    eventLog("alarm: snoozed");
     audio.stop();
     if (localNow(&now)) alarmClock.snooze(now); else alarmClock.stop();
     hideAlarmRinging();
@@ -52,9 +58,9 @@ static void ringingSnooze() {
 }
 
 void alarmRingingStopNow() { ringingStop(); }
-void alarmRingingSnoozeNow() { ringingSnooze(); }
+void alarmRingingSnoozeNow() { auto_snoozes = 0; ringingSnooze(); }
 static void stop_cb(lv_event_t* e) { (void)e; ringingStop(); }
-static void snooze_cb(lv_event_t* e) { (void)e; ringingSnooze(); }
+static void snooze_cb(lv_event_t* e) { (void)e; auto_snoozes = 0; ringingSnooze(); }
 
 static lv_obj_t* smallButton(lv_obj_t* parent, const char* text, lv_event_cb_t cb, uint32_t color) {
     lv_obj_t* b = lv_btn_create(parent);
@@ -337,12 +343,38 @@ void alarmRingingSetTime(const char* time_str) {
     ringTimeNow();
 }
 
+// The alarm sound is either the chosen song from the SD card or the plain beep. A missing card or file, or a decoder
+// that will not start, falls back to the beep, so the alarm always makes noise.
+static bool playAlarmSound(bool loop) {
+    const AlarmConfig& c = alarmClock.cfg();
+    audio.setVolume(c.volume);
+    if (c.song == "beep") { audio.playBeep(loop); return true; }
+    String path = String(AudioPlayer::musicDir()) + "/" + c.song;
+    if (audio.playFile(path, loop)) return true;
+    eventLog("alarm: %s is not available, using the beep", c.song.c_str());
+    audio.playBeep(loop);
+    return false;
+}
+
+void testPlayAlarmSound(bool loop) { playAlarmSound(loop); }
+
+// An alarm nobody answers snoozes itself after 5 minutes, and stops for good after the third time.
+static uint32_t ring_t0 = 0;
+static lv_timer_t* ring_guard = nullptr;
+static void ring_guard_cb(lv_timer_t* t) {
+    (void)t;
+    if (!isAlarmRingingShown() || millis() - ring_t0 < 5UL * 60UL * 1000UL) return;
+    if (++auto_snoozes >= 3) { eventLog("alarm: nobody answered three times, stopped"); ringingStop(); }
+    else { eventLog("alarm: nobody answered for 5 min, snoozing"); ringingSnooze(); }
+}
+
 void startAlarmRinging() {
     const AlarmConfig& c = alarmClock.cfg();
+    eventLog("alarm: ringing (song %s, volume %d%%)", c.song.c_str(), c.volume);
     screensaver.wake();
-    audio.setVolume(c.volume);
-    String path = String(AudioPlayer::musicDir()) + "/" + c.song;
-    if (!audio.playFile(path, true)) audio.playBuiltin(true);
+    playAlarmSound(true);
+    ring_t0 = millis();
+    if (!ring_guard) ring_guard = lv_timer_create(ring_guard_cb, 2000, nullptr);
     delay(30);   // let the task open the file so the ringing view can name it
     showAlarmRinging();
     refreshAlarmUI();
@@ -369,9 +401,8 @@ static void test_cb(lv_event_t* e) {
         audio.stop();
         test_on = false;
     } else {
-        audio.setVolume(alarmClock.cfg().volume);
-        String path = String(AudioPlayer::musicDir()) + "/" + alarmClock.cfg().song;
-        if (!audio.playFile(path, false)) audio.playBuiltin(false);   // the built-in tune when the file is not on the card
+        eventLog("test sound: start");
+        playAlarmSound(false);
         test_on = true;
         test_t0 = millis();
     }
@@ -400,6 +431,18 @@ static void vol_cb(lv_event_t* e) {
     } else if (code == LV_EVENT_RELEASED) {
         alarmClock.save();
     }
+}
+
+static lv_obj_t* snd_lbl = nullptr;
+static void snd_update() {
+    if (snd_lbl) lv_label_set_text(snd_lbl, alarmClock.cfg().song == "beep" ? "Alarm sound: Beep" : "Alarm sound: Music");
+}
+static void snd_cb(lv_event_t* e) {
+    (void)e;
+    audio.stop(); test_on = false; test_update_label();
+    alarmClock.setSong(alarmClock.cfg().song == "beep" ? String("fur_elise.mp3") : String("beep"));
+    alarmClock.save();
+    snd_update();
 }
 
 void createAlarmTestControls(lv_obj_t* parent, bool isLargeScreen) {
@@ -443,6 +486,18 @@ void createAlarmTestControls(lv_obj_t* parent, bool isLargeScreen) {
     lv_obj_set_style_pad_all(sl, 4, LV_PART_KNOB);
     lv_obj_set_ext_click_area(sl, 12);
     lv_obj_add_event_cb(sl, vol_cb, LV_EVENT_ALL, nullptr);
+
+    lv_obj_t* sb = lv_btn_create(parent);
+    lv_obj_set_size(sb, lv_pct(100), isLargeScreen ? 44 : 34);
+    lv_obj_set_style_radius(sb, 8, LV_PART_MAIN);
+    lv_obj_set_style_shadow_width(sb, 0, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(sb, lv_color_hex(0x89b4fa), LV_PART_MAIN);
+    snd_lbl = lv_label_create(sb);
+    lv_obj_set_style_text_font(snd_lbl, isLargeScreen ? &lv_font_montserrat_20 : &lv_font_montserrat_14, LV_PART_MAIN);
+    lv_obj_set_style_text_color(snd_lbl, lv_color_hex(0x11111b), LV_PART_MAIN);
+    lv_obj_center(snd_lbl);
+    lv_obj_add_event_cb(sb, snd_cb, LV_EVENT_CLICKED, nullptr);
+    snd_update();
 
     test_timer = lv_timer_create(test_timer_cb, 500, nullptr);
 }

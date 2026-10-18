@@ -4,11 +4,26 @@
 #include <FS.h>
 #include "config/config.h"
 
+static SemaphoreHandle_t sdMutex = nullptr;
+static portMUX_TYPE sdMutexInit = portMUX_INITIALIZER_UNLOCKED;
+SdLock::SdLock() {
+    if (!sdMutex) {
+        SemaphoreHandle_t m = xSemaphoreCreateRecursiveMutex();
+        portENTER_CRITICAL(&sdMutexInit);
+        if (!sdMutex) { sdMutex = m; m = nullptr; }
+        portEXIT_CRITICAL(&sdMutexInit);
+        if (m) vSemaphoreDelete(m);
+    }
+    xSemaphoreTakeRecursive(sdMutex, portMAX_DELAY);
+}
+SdLock::~SdLock() { xSemaphoreGiveRecursive(sdMutex); }
+
 static SPIClass sdSPI(VSPI);
 static bool sdMounted = false;
 static bool sdCardDetected = false;
 
 bool SdCardManager::begin() {
+    SdLock lock;
     if (sdMounted) {
         return true;
     }
@@ -33,6 +48,7 @@ bool SdCardManager::isMounted() {
 }
 
 void SdCardManager::end() {
+    SdLock lock;
     if (sdMounted) {
         SD.end();
         sdMounted = false;
