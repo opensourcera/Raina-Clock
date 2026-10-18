@@ -26,6 +26,7 @@ extern SettingsManager settings;
 #include "config_backup.h"
 #include "ui_wifi.h"
 #include "ui_alarm.h"
+#include "ui_menu.h"
 #ifndef NATIVE_TEST
 #include "todo_html.h"
 #include "alarm_html.h"
@@ -82,7 +83,7 @@ void WifiManager::begin() {
     WiFi.setTxPower(WIFI_POWER_11dBm);
 
     _improv = new ImprovWiFi(&Serial);
-    _improv->setDeviceInfo(ImprovTypes::ChipFamily::CF_ESP32, "CYD-Alarm-Clock", "1.0", "CYD Alarm Clock", "http://{LOCAL_IPV4}");
+    _improv->setDeviceInfo(ImprovTypes::ChipFamily::CF_ESP32, "CYD-Alarm-Clock", "1.0", "Raina Clock", "http://{LOCAL_IPV4}");
     
     _improv->setCustomConnectWiFi([](const char *ssid, const char *password) {
         Serial.printf("\n[WiFi] Improv connecting to %s...\n", ssid);
@@ -370,7 +371,7 @@ void WifiManager::handleRoot() {
     if (scanStatus == WIFI_SCAN_RUNNING || scanStatus == WIFI_SCAN_FAILED) {
         html += "<meta http-equiv='refresh' content='3'>";
     }
-    html += "<title>CYD Alarm Clock Setup</title>";
+    html += "<title>Raina Clock Setup</title>";
     html += "<style>";
     html += "body { font-family: 'Inter', system-ui, sans-serif; background: #1e1e2e; color: #cdd6f4; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; box-sizing: border-box; }";
     html += ".card { background: #181825; border-radius: 12px; padding: 30px; width: 100%; max-width: 400px; box-shadow: 0 8px 30px rgba(0,0,0,0.3); border: 1px solid #313244; }";
@@ -421,7 +422,7 @@ void WifiManager::handleRoot() {
     html += "</script>";
     html += "</head><body>";
     html += "<div class='card'>";
-    html += "<h2 style=\"margin-bottom: 5px;\">CYD Alarm Clock</h2>";
+    html += "<h2 style=\"margin-bottom: 5px;\">Raina Clock</h2>";
 #ifdef APP_VERSION
     html += "<p style=\"text-align: center; color: #a6adc8; margin-top: 0; margin-bottom: 20px; font-size: 14px;\">Version " + String(APP_VERSION) + "</p>";
 #else
@@ -574,7 +575,7 @@ void WifiManager::startWebServer() {
         settings.factoryReset();
         WiFi.disconnect(true, true);
         String html = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">";
-        html += "<title>CYD Alarm Clock</title>";
+        html += "<title>Raina Clock</title>";
         html += "<style>body { font-family: 'Inter', sans-serif; background: #1e1e2e; color: #cdd6f4; text-align: center; padding: 50px; }</style>";
         html += "<meta http-equiv=\"refresh\" content=\"5;url=/\">";
         html += "</head><body><h2 style='color: #f5c2e7;'>Factory Reset Complete</h2><p>The device is restarting in AP Setup mode...</p></body></html>";
@@ -851,8 +852,8 @@ void WifiManager::startWebServer() {
         if (!settings.getApiServerEnabled()) { _webServer->send(403, "text/plain", "Forbidden: API server disabled in settings"); return; }
         String page = _webServer->arg("page");
         if (page == "password") showWifiPasswordPreview(); else if (page == "zip") showZipSetup();
-        else if (page == "alarm") showAlarmSetDialog(false); else if (page == "countdown") showAlarmSetDialog(true);
-        else { closeWifiSetup(); closeAlarmSetDialog(); }
+        else if (page == "alarm") showAlarmSetDialog(false); else if (page == "menu") showSlideMenu(); else if (page == "countdown") showAlarmSetDialog(true);
+        else { closeWifiSetup(); closeAlarmSetDialog(); hideSlideMenu(); }
         _webServer->send(200, "text/plain", "ok");
     });
     _webServer->on("/api/settings_tab", [this]() {

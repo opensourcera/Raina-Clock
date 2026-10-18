@@ -78,16 +78,6 @@ static lv_obj_t* smallButton(lv_obj_t* parent, const char* text, lv_event_cb_t c
 
 // ---- quick buttons
 
-static void inHours(float h) {
-    struct tm now;
-    if (!localNow(&now)) return;
-    alarmClock.setInHours(h, now);
-    alarmClock.save();
-    refreshAlarmUI();
-}
-static void six_cb(lv_event_t* e) { (void)e; inHours(6); }
-static void seven_cb(lv_event_t* e) { (void)e; inHours(7); }
-static void off_cb(lv_event_t* e) { (void)e; alarmClock.setEnabled(false); alarmClock.save(); refreshAlarmUI(); }
 
 // ---- the Set popup: the time of day (every day), or a count down (hours and minutes from now). The numbers are typed
 // on a big keypad; tap the hour or the minutes to choose which one the keys change.
@@ -112,6 +102,14 @@ static void dialogClose() {
     box_h = box_m = lbl_h = lbl_m = btn_am = btn_pm = nullptr;
 }
 static void dialog_cancel_cb(lv_event_t* e) { (void)e; dialogClose(); }
+static void dialog_off_cb(lv_event_t* e) {
+    (void)e;
+    alarmClock.setEnabled(false);
+    if (alarmClock.isSnoozed()) alarmClock.stop();
+    alarmClock.save();
+    dialogClose();
+    refreshAlarmUI();
+}
 
 static void dialog_rebuild_async(void* arg) { (void)arg; dialogClose(); dialogBuild(); }
 
@@ -270,6 +268,10 @@ static void dialogBuild() {
     lv_obj_set_style_text_font(title, fm, LV_PART_MAIN);
     lv_obj_set_style_text_color(title, lv_color_hex(0xfab387), LV_PART_MAIN);
     lv_obj_set_pos(title, g + 2, g);
+    if (alarmClock.cfg().enabled || alarmClock.isSnoozed()) {
+        int ow = alarm_large ? 64 : 50;
+        plainBtn(set_dialog, "Off", dialog_off_cb, 0xf38ba8, colW + g - ow, g, ow, alarm_large ? 32 : 24, fs);
+    }
 
     int fy = g + (alarm_large ? 36 : 28);
     box_h = fieldBox(set_dialog, &lbl_h, box_h_cb, g, fy, fieldW, fieldH);
@@ -359,45 +361,73 @@ void closeAlarmSetDialog() { dialogClose(); }
 
 // ---- the bar on the clock tab
 
+static lv_obj_t* bell_lbl = nullptr;
+static lv_obj_t* bell_slash = nullptr;
+
+// The Clock page shows only a bell at the bottom left: slashed when no alarm is set, otherwise with the alarm time and
+// the time left beside it in small type. A tap on it opens the Set popup.
 void createAlarmBar(lv_obj_t* parent, bool isLargeScreen) {
     alarm_large = isLargeScreen;
     lv_obj_t* bar = lv_obj_create(parent);
-    lv_obj_set_size(bar, LV_PCT(96), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(bar, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(bar, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_bg_color(bar, lv_color_hex(0x11111b), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(bar, 140, LV_PART_MAIN);
+    lv_obj_set_size(bar, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(bar, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(bar, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_bg_opa(bar, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_style_border_width(bar, 0, LV_PART_MAIN);
-    lv_obj_set_style_radius(bar, 10, LV_PART_MAIN);
     lv_obj_set_style_pad_all(bar, 4, LV_PART_MAIN);
-    lv_obj_set_style_pad_row(bar, 3, LV_PART_MAIN);
+    lv_obj_set_style_pad_column(bar, 8, LV_PART_MAIN);
     lv_obj_clear_flag(bar, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_align(bar, LV_ALIGN_BOTTOM_MID, 0, -3);
+    lv_obj_set_ext_click_area(bar, 12);
+    lv_obj_add_event_cb(bar, set_cb, LV_EVENT_CLICKED, nullptr);
+    lv_obj_align(bar, LV_ALIGN_BOTTOM_LEFT, 2, -2);
+
+    lv_obj_t* bell_box = lv_obj_create(bar);             // the bell, with the slash drawn over it
+    int bs = isLargeScreen ? 40 : 32;
+    lv_obj_set_size(bell_box, bs, bs);
+    lv_obj_set_style_bg_opa(bell_box, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(bell_box, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(bell_box, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(bell_box, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_t* bell = lv_label_create(bell_box);
+    lv_label_set_text(bell, LV_SYMBOL_BELL);
+    lv_obj_set_style_text_font(bell, &lv_font_montserrat_28, LV_PART_MAIN);
+    lv_obj_center(bell);
+    static lv_point_t slash_pts[2];
+    slash_pts[0].x = 3; slash_pts[0].y = 3; slash_pts[1].x = bs - 3; slash_pts[1].y = bs - 3;
+    bell_slash = lv_line_create(bell_box);
+    lv_line_set_points(bell_slash, slash_pts, 2);
+    lv_obj_set_style_line_width(bell_slash, 3, LV_PART_MAIN);
+    lv_obj_set_style_line_rounded(bell_slash, true, LV_PART_MAIN);
+    lv_obj_set_style_line_color(bell_slash, lv_color_hex(0xf38ba8), LV_PART_MAIN);
+    bell_lbl = bell;
 
     alarm_label = lv_label_create(bar);
     lv_obj_set_style_text_font(alarm_label, isLargeScreen ? &lv_font_montserrat_20 : &lv_font_montserrat_14, LV_PART_MAIN);
-    lv_obj_set_style_text_color(alarm_label, lv_color_hex(0xf9e2af), LV_PART_MAIN);
-    lv_label_set_text(alarm_label, "Alarm off");
-
-    lv_obj_t* row = lv_obj_create(bar);
-    lv_obj_set_size(row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_set_style_border_width(row, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(row, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_gap(row, 6, LV_PART_MAIN);
-    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
-    smallButton(row, "6 h", six_cb, 0xa6e3a1);
-    smallButton(row, "7 h", seven_cb, 0x94e2d5);
-    smallButton(row, "Set", set_cb, 0xfab387);
-    smallButton(row, "Off", off_cb, 0x6c7086);
+    lv_obj_set_style_text_color(alarm_label, lv_color_hex(0xbac2de), LV_PART_MAIN);
+    lv_label_set_text(alarm_label, "");
     refreshAlarmUI();
 }
 
 void refreshAlarmUI() {
-    if (alarm_label == nullptr) return;
+    if (alarm_label == nullptr || bell_lbl == nullptr) return;
+    const AlarmConfig& c = alarmClock.cfg();
+    bool use24 = settings.getUse24HourFormat();
+    int snz = alarmClock.snoozeMinuteOfDay();
+    bool on = c.enabled || snz >= 0;
+    if (on) lv_obj_add_flag(bell_slash, LV_OBJ_FLAG_HIDDEN); else lv_obj_clear_flag(bell_slash, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_style_text_color(bell_lbl, lv_color_hex(on ? 0xf9e2af : 0x6c7086), LV_PART_MAIN);
+    if (!on) { lv_label_set_text(alarm_label, ""); return; }
+    int target = snz >= 0 ? snz : c.hour * 60 + c.minute;
+    String text = AlarmManager::formatTime(target / 60, target % 60, use24);
+    if (snz >= 0) text = "Snoozed " + text;
     struct tm now;
-    String text = localNow(&now) ? alarmClock.nextText(now, settings.getUse24HourFormat()) : alarmClock.timeText(settings.getUse24HourFormat());
+    if (localNow(&now)) {
+        int left = target - (now.tm_hour * 60 + now.tm_min);
+        if (left <= 0) left += 1440;
+        char b[16];
+        snprintf(b, sizeof(b), "  in %d:%02d", left / 60, left % 60);
+        text += b;
+    }
     lv_label_set_text(alarm_label, text.c_str());
 }
 
@@ -523,7 +553,7 @@ static void test_timer_cb(lv_timer_t* t) {
 static void vol_text() {
     if (vol_lbl == nullptr) return;
     char b[24];
-    snprintf(b, sizeof(b), "Volume %d%%", alarmClock.cfg().volume);
+    snprintf(b, sizeof(b), "%d%%", alarmClock.cfg().volume);
     lv_label_set_text(vol_lbl, b);
 }
 
@@ -574,7 +604,7 @@ void createAlarmTestControls(lv_obj_t* parent, bool isLargeScreen) {
     vol_text();
 
     lv_obj_t* sl = lv_slider_create(card);
-    lv_obj_set_size(sl, lv_pct(92), isLargeScreen ? 16 : 12);
+    lv_obj_set_size(sl, lv_pct(86), isLargeScreen ? 16 : 12);
     lv_slider_set_range(sl, 0, 100);
     lv_slider_set_value(sl, alarmClock.cfg().volume, LV_ANIM_OFF);
     lv_obj_set_style_bg_color(sl, lv_color_hex(0x45475a), LV_PART_MAIN);

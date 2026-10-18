@@ -32,6 +32,7 @@ public:
     void stop();                                            // ringing over; a one-shot alarm switches itself off
     bool isRinging() const { return _ringing; }
     bool isSnoozed() const { return _snoozeKey >= 0; }
+    int snoozeMinuteOfDay() const { return _snoozeKey < 0 ? -1 : (int)(_snoozeKey % 1440); }
 
     String nextText(const struct tm& now, bool use24h) const;   // "6:30 AM, in 7 h 12 min", "Snoozed to 6:39 AM", "Off"
     String timeText(bool use24h) const;                         // "6:30 AM"

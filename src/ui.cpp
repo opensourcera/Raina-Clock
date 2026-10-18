@@ -1,5 +1,6 @@
 #include "ui.h"
 #include "ui_todo.h"
+#include "ui_menu.h"
 #include "ui_trip.h"
 #include "ui_wifi.h"
 #include "ui_alarm.h"
@@ -424,8 +425,8 @@ static lv_obj_t * make_radio(lv_obj_t * parent, const char * text, int group, in
     lv_obj_set_style_bg_opa(cb, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_radius(cb, 8, LV_PART_MAIN);
     lv_obj_set_style_pad_all(cb, 4, LV_PART_MAIN);
-    lv_obj_set_style_pad_left(cb, 8, LV_PART_MAIN);
-    lv_obj_set_style_pad_column(cb, 8, LV_PART_MAIN);
+    lv_obj_set_style_pad_left(cb, 4, LV_PART_MAIN);
+    lv_obj_set_style_pad_column(cb, 4, LV_PART_MAIN);
     lv_obj_set_style_radius(cb, LV_RADIUS_CIRCLE, LV_PART_INDICATOR);
     lv_obj_set_style_border_width(cb, 2, LV_PART_INDICATOR);
     lv_obj_set_style_border_color(cb, TO_LV_COLOR(f.overlay0), LV_PART_INDICATOR);
@@ -575,13 +576,16 @@ void initUI() {
 
     // Header Title (Time/App Name)
     header_title = lv_label_create(header);
-#ifdef APP_VERSION
-    lv_label_set_text(header_title, isLandscape ? "CYD Alarm Clock\n" APP_VERSION : "CYD Weather\nStation\n" APP_VERSION);
-#else
-    lv_label_set_text(header_title, isLandscape ? "CYD Alarm Clock" : "CYD Weather\nStation");
-#endif
+    {   // the logo: a girl's face with long hair (raina_logo.c)
+        LV_IMG_DECLARE(raina_logo);
+        lv_obj_t * logo = lv_img_create(header);
+        lv_img_set_src(logo, &raina_logo);
+        lv_obj_align(logo, LV_ALIGN_LEFT_MID, 6, 0);
+    }
+    lv_label_set_text(header_title, "Raina Clock");
+    lv_obj_set_style_text_font(header_title, &lv_font_montserrat_20, LV_PART_MAIN);
     lv_obj_set_style_text_color(header_title, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).text), LV_PART_MAIN);
-    lv_obj_align(header_title, LV_ALIGN_LEFT_MID, 10, 0);
+    lv_obj_align(header_title, LV_ALIGN_LEFT_MID, 48, 0);
     lv_label_set_long_mode(header_title, LV_LABEL_LONG_DOT);
     lv_obj_set_width(header_title, isLandscape ? 220 : 120);
     if (!settings.getShowTitleVersion()) {
@@ -620,13 +624,14 @@ void initUI() {
     lv_obj_add_flag(offline_indicator, LV_OBJ_FLAG_HIDDEN);
 
     // 2. Tabview Setup
-    lv_obj_t * tabview = lv_tabview_create(scr, LV_DIR_BOTTOM, 35);
+    lv_obj_t * tabview = lv_tabview_create(scr, LV_DIR_BOTTOM, 0);   // no tab bar: the slide-up menu (ui_menu.cpp) picks pages
     tabview_obj = tabview;
     lv_obj_set_size(tabview, screen_w, screen_h - header_h);
     lv_obj_align(tabview, LV_ALIGN_BOTTOM_MID, 0, 0);
 
     // Style the tabview container and buttons
     lv_obj_t * tab_btns = lv_tabview_get_tab_btns(tabview);
+    lv_obj_add_flag(tab_btns, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_style_bg_color(tabview, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).base), LV_PART_MAIN);
     
     // Style the buttons
@@ -667,7 +672,7 @@ void initUI() {
     lv_obj_set_style_pad_all(tab_curr, 5, LV_PART_MAIN);
     lv_obj_set_style_pad_all(tab_fore, 5, LV_PART_MAIN);
     lv_obj_set_style_pad_all(tab_hourly, 5, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(tab_settings, 5, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(tab_settings, 0, LV_PART_MAIN);
     // Hide scrollbars so they don't appear visually
     lv_obj_set_scrollbar_mode(tab_curr, LV_SCROLLBAR_MODE_OFF);
     lv_obj_set_scrollbar_mode(tab_fore, LV_SCROLLBAR_MODE_OFF);
@@ -679,6 +684,7 @@ void initUI() {
     lv_obj_set_scrollbar_mode(tab_todo, LV_SCROLLBAR_MODE_AUTO);
     createTodoTab(tab_todo, isLandscape, isLargeScreen);
     createTripTab(tab_trip, tabview, 4, isLandscape, isLargeScreen);
+    createSlideMenu(tabview, isLargeScreen);
 
     // Create Hourly Forecast Chart
     hourly_chart = lv_chart_create(tab_hourly);
@@ -1050,7 +1056,8 @@ void initUI() {
     // The upstream code keeps building rows into left_col / right_col; flush_settings() moves everything built so
     // far into the page chosen for that section; the next call announces the page of the next section.
     // Page -1 is a hidden holder for the upstream dropdowns and switch that the radio buttons replace.
-    lv_obj_t * set_tabs = lv_tabview_create(tab_settings, LV_DIR_TOP, isLargeScreen ? 40 : 30);
+    int side_w = isLargeScreen ? 124 : 92, back_h = isLargeScreen ? 52 : 40;   // the section list on the left, Back on top of it
+    lv_obj_t * set_tabs = lv_tabview_create(tab_settings, LV_DIR_LEFT, side_w);
     lv_obj_set_size(set_tabs, lv_pct(100), lv_pct(100));
     lv_obj_align(set_tabs, LV_ALIGN_TOP_LEFT, 0, 0);
     lv_obj_set_style_bg_opa(set_tabs, LV_OPA_TRANSP, LV_PART_MAIN);
@@ -1066,10 +1073,30 @@ void initUI() {
         lv_obj_set_style_text_font(sb, isLargeScreen ? &lv_font_montserrat_20 : &lv_font_montserrat_14, LV_PART_ITEMS);
         lv_obj_set_style_pad_left(sb, 0, LV_PART_ITEMS);
         lv_obj_set_style_pad_right(sb, 0, LV_PART_ITEMS);
+        lv_obj_set_style_pad_top(sb, back_h + 4, LV_PART_MAIN);
+        lv_obj_set_style_pad_row(sb, 2, LV_PART_MAIN);
+        lv_obj_set_style_radius(sb, 8, LV_PART_ITEMS);
     }
-    const char * set_names[7] = {"Net", "Look", "Disp", "Light", "Night", "Data", "Sens"};
+    {
+        lv_obj_t * back = lv_btn_create(tab_settings);
+        lv_obj_set_size(back, side_w - 8, back_h);
+        lv_obj_set_pos(back, 4, 4);
+        lv_obj_set_style_bg_color(back, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).surface0), LV_PART_MAIN);
+        lv_obj_set_style_radius(back, 10, LV_PART_MAIN);
+        lv_obj_set_style_shadow_width(back, 0, LV_PART_MAIN);
+        lv_obj_t * bl = lv_label_create(back);
+        lv_label_set_text(bl, LV_SYMBOL_LEFT " Back");
+        lv_obj_set_style_text_font(bl, isLargeScreen ? &lv_font_montserrat_20 : &lv_font_montserrat_14, LV_PART_MAIN);
+        lv_obj_set_style_text_color(bl, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).text), LV_PART_MAIN);
+        lv_obj_center(bl);
+        lv_obj_add_event_cb(back, [](lv_event_t * e) { (void)e; if (tabview_obj) lv_tabview_set_act(tabview_obj, 0, LV_ANIM_OFF); }, LV_EVENT_CLICKED, nullptr);
+    }
+    // Page 2 (Disp) is gone: its time zone and 24-hour rows live on Look; orientation and the title switch are dropped
+    const char * set_names[7] = {LV_SYMBOL_WIFI " Net", LV_SYMBOL_IMAGE " Look", nullptr, LV_SYMBOL_EYE_OPEN " Light",
+                                 LV_SYMBOL_POWER " Night", LV_SYMBOL_SD_CARD " Data", LV_SYMBOL_GPS " Sens"};
     lv_obj_t * set_pg[7];
     for (int i = 0; i < 7; i++) {
+        if (set_names[i] == nullptr) { set_pg[i] = nullptr; continue; }
         set_pg[i] = lv_tabview_add_tab(set_tabs, set_names[i]);
         lv_obj_set_style_bg_color(set_pg[i], TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).base), LV_PART_MAIN);
         lv_obj_set_style_pad_all(set_pg[i], 4, LV_PART_MAIN);
@@ -1086,12 +1113,12 @@ void initUI() {
     {
         const char * themes[4] = {"Mocha", "Macchiato", "Frappe", "Latte"};
         for (int i = 0; i < 4; i++) make_radio(set_pg[1], themes[i], 1, i, settings.getThemeFlavor() == i + 1, isLargeScreen);
-        make_radio(set_pg[1], "Fahrenheit", 2, 0, settings.getUnitSystem() == UNIT_IMPERIAL, isLargeScreen);
-        make_radio(set_pg[1], "Celsius", 2, 1, settings.getUnitSystem() != UNIT_IMPERIAL, isLargeScreen);
+        make_radio(set_pg[1], "\xC2\xB0" "F", 2, 0, settings.getUnitSystem() == UNIT_IMPERIAL, isLargeScreen);
+        make_radio(set_pg[1], "\xC2\xB0" "C", 2, 1, settings.getUnitSystem() != UNIT_IMPERIAL, isLargeScreen);
         const char * orients[4] = {"Landscape", "Portrait", "Land. flip", "Port. flip"};
         int cur_rot = settings.getScreenOrientation();
         int cur_idx = (cur_rot >= 0 && cur_rot < 4) ? rotation_to_dropdown[cur_rot] : 0;
-        for (int i = 0; i < 4; i++) make_radio(set_pg[2], orients[i], 3, i, cur_idx == i, isLargeScreen);
+        (void)orients; (void)cur_idx;                    // no orientation choice any more
     }
 
     int set_cur_page = 0;
@@ -1103,8 +1130,12 @@ void initUI() {
                 if (set_cur_page < 0) { lv_obj_set_parent(ch, set_junk); continue; }
                 lv_obj_set_parent(ch, set_pg[set_cur_page]);
                 bool plain = lv_obj_check_type(ch, &lv_slider_class) || lv_obj_check_type(ch, &lv_label_class);
-                bool full = set_cur_page == 4 || set_cur_page == 6 || (set_cur_page == 3 && plain) || (set_cur_page == 0 && !lv_obj_check_type(ch, &lv_btn_class));
-                lv_obj_set_width(ch, lv_pct(full ? 100 : 48));   // two switches per row, sliders and their labels full width
+                bool half = !plain && (lv_obj_check_type(ch, &lv_checkbox_class) || lv_obj_check_type(ch, &lv_btn_class));
+                lv_obj_set_width(ch, lv_pct(half ? 48 : 100));   // radio choices and buttons two per row, switch rows full width
+                if (lv_obj_check_type(ch, &lv_slider_class)) {    // the knob stands out past the ends: keep it on screen
+                    lv_obj_set_width(ch, lv_pct(88));
+                    lv_obj_set_style_translate_x(ch, 10, LV_PART_MAIN);
+                }
             }
         }
         set_cur_page = next_page;
@@ -1148,7 +1179,7 @@ void initUI() {
     }
     lv_obj_add_event_cb(unit_sw, unit_sw_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
-    flush_settings(2);
+    flush_settings(-1);
     // Title & Version row
     lv_obj_t * title_ver_row = lv_obj_create(left_col);
     lv_obj_clear_flag(title_ver_row, LV_OBJ_FLAG_CLICKABLE);
@@ -1484,7 +1515,7 @@ void initUI() {
     }
     lv_obj_add_event_cb(ui_auto_bright_sw, auto_sw_event_cb, LV_EVENT_VALUE_CHANGED, ui_brightness_slider);
 
-    flush_settings(2);   // the time zone lives on the Disp page: the Net page is full
+    flush_settings(1);   // the time zone lives on the Look page
     // Timezone label
     lv_obj_t * tz_label = lv_label_create(right_col);
     lv_label_set_text(tz_label, "Timezone");
@@ -1535,7 +1566,7 @@ void initUI() {
     lv_obj_align(tz_plus_lbl, LV_ALIGN_CENTER, 0, 0);
     lv_obj_add_event_cb(tz_plus_btn, tz_btn_event_cb, LV_EVENT_CLICKED, (void*)(intptr_t)1);
 
-    flush_settings(2);
+    flush_settings(1);
     // 24-hour format row
     lv_obj_t * h24_row = lv_obj_create(right_col);
     lv_obj_clear_flag(h24_row, LV_OBJ_FLAG_CLICKABLE);

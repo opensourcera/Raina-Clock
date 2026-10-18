@@ -7,7 +7,7 @@ const char settings_html[] PROGMEM = R"=====(
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CYD Alarm Clock - Settings</title>
+<title>Raina Clock - Settings</title>
 <style>
 body { font-family: 'Inter', system-ui, sans-serif; background: #1e1e2e; color: #cdd6f4; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; box-sizing: border-box; }
 .card { background: #181825; border-radius: 12px; padding: 30px; width: 100%; max-width: 500px; box-shadow: 0 8px 30px rgba(0,0,0,0.3); border: 1px solid #313244; }
@@ -34,7 +34,7 @@ button:hover { background: #f5c2e7; }
 </head>
 <body>
 <div class='card'>
-<h2 style="margin-bottom: 5px;">CYD Alarm Clock</h2>
+<h2 style="margin-bottom: 5px;">Raina Clock</h2>
 <p style="text-align: center; color: #a6adc8; margin-top: 0; margin-bottom: 20px; font-size: 14px;">Version %APP_VERSION%</p>
 <form method='POST' action='/settings/save'>
 

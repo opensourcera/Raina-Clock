@@ -32,8 +32,10 @@ static bool fullscreen_on = false;
 static void clock_tick(lv_timer_t* t) {
     (void)t;
     if (clock_tab == nullptr || clock_tabview == nullptr) return;
-    bool on_clock = (int)lv_tabview_get_tab_act(clock_tabview) == clock_index;
-    if (on_clock != fullscreen_on) { fullscreen_on = on_clock; setClockFullscreen(on_clock); }   // header bar away on this tab only
+    int act = (int)lv_tabview_get_tab_act(clock_tabview);
+    bool on_clock = act == clock_index;
+    bool full = on_clock || act == clock_index + 1;   // the header bar is away on the Clock page and on Setup
+    if (full != fullscreen_on) { fullscreen_on = full; setClockFullscreen(full); }
     if (!on_clock) return;
 
     struct tm ti;

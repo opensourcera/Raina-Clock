@@ -95,7 +95,7 @@ void onWiFiDisconnect(WiFiEvent_t event, WiFiEventInfo_t info) {
 
 void setup() {
     Serial.begin(115200);
-    Serial.println("[System] Booting ESP32 CYD Alarm Clock...");
+    Serial.println("[System] Booting ESP32 Raina Clock...");
     eventLogBegin();
 
     dht22.begin();
