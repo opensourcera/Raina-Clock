@@ -83,6 +83,9 @@ static lv_obj_t* smallButton(lv_obj_t* parent, const char* text, lv_event_cb_t c
 // on a big keypad; tap the hour or the minutes to choose which one the keys change.
 
 static bool dlg_countdown = false;      // remembered between openings
+static String dlg_name;                 // the alarm's name while the popup is open; kept on Save
+static lv_obj_t* name_lbl = nullptr;    // the text on the Info button
+static void nameWindowClose();
 static int dlg_cd_hours = 6, dlg_cd_minutes = 0;
 static void dialogBuild();
 
@@ -99,7 +102,8 @@ static lv_obj_t* btn_pm = nullptr;
 
 static void dialogClose() {
     if (set_dialog) { lv_obj_del(set_dialog); set_dialog = nullptr; }
-    box_h = box_m = lbl_h = lbl_m = btn_am = btn_pm = nullptr;
+    box_h = box_m = lbl_h = lbl_m = btn_am = btn_pm = name_lbl = nullptr;
+    nameWindowClose();
 }
 static void dialog_cancel_cb(lv_event_t* e) { (void)e; dialogClose(); }
 static void dialog_off_cb(lv_event_t* e) {
@@ -113,9 +117,128 @@ static void dialog_off_cb(lv_event_t* e) {
 
 static void dialog_rebuild_async(void* arg) { (void)arg; dialogClose(); dialogBuild(); }
 
-static void dialog_countdown_cb(lv_event_t* e) {
-    dlg_countdown = lv_obj_has_state(lv_event_get_target(e), LV_STATE_CHECKED);
-    lv_async_call(dialog_rebuild_async, nullptr);       // rebuild outside the checkbox's own callback
+// The mode toggle: the down arrow is a count down, the clock a time of day
+static void mode_cb(lv_event_t* e) {
+    bool cd = (intptr_t)lv_event_get_user_data(e) != 0;
+    if (cd == dlg_countdown) return;
+    dlg_countdown = cd;
+    lv_async_call(dialog_rebuild_async, nullptr);       // rebuild outside the button's own callback
+}
+
+// ---- the name: typed on a big keyboard of lower case letters, in a window over the Set popup
+
+static lv_obj_t* name_win = nullptr;
+static lv_obj_t* name_ta = nullptr;
+
+static void nameButtonText() {
+    if (name_lbl == nullptr) return;
+    if (dlg_name.length()) lv_label_set_text(name_lbl, dlg_name.c_str());
+    else lv_label_set_text(name_lbl, "Name");
+}
+
+static void nameWindowClose() {
+    if (name_win) { lv_obj_del_async(name_win); name_win = nullptr; name_ta = nullptr; }
+}
+
+static lv_obj_t* winBtn(lv_obj_t* parent, const char* text, lv_event_cb_t cb, uint32_t color, int x, int y, int w, int h) {
+    lv_obj_t* b = lv_btn_create(parent);
+    lv_obj_set_pos(b, x, y);
+    lv_obj_set_size(b, w, h);
+    lv_obj_set_style_bg_color(b, lv_color_hex(color), LV_PART_MAIN);
+    lv_obj_set_style_radius(b, 8, LV_PART_MAIN);
+    lv_obj_set_style_shadow_width(b, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(b, 0, LV_PART_MAIN);
+    lv_obj_t* l = lv_label_create(b);
+    lv_label_set_text(l, text);
+    lv_obj_set_style_text_font(l, alarm_large ? &lv_font_montserrat_28 : &lv_font_montserrat_20, LV_PART_MAIN);
+    lv_obj_set_style_text_color(l, lv_color_hex(0x11111b), LV_PART_MAIN);
+    lv_obj_center(l);
+    lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, nullptr);
+    return b;
+}
+
+static void nameWindowOpen() {
+    if (name_win) return;
+    int W = lv_disp_get_hor_res(nullptr), H = lv_disp_get_ver_res(nullptr);
+    name_win = lv_obj_create(lv_layer_top());
+    lv_obj_set_size(name_win, W, H);
+    lv_obj_set_pos(name_win, 0, 0);
+    lv_obj_set_style_bg_color(name_win, lv_color_hex(0x1e1e2e), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(name_win, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_border_width(name_win, 0, LV_PART_MAIN);
+    lv_obj_set_style_radius(name_win, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(name_win, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(name_win, LV_OBJ_FLAG_SCROLLABLE);
+
+    // The box on top, beside a back arrow; the letters in the middle; Space, Delete and OK on their own row below
+    int th = alarm_large ? 48 : 36, ch = alarm_large ? 58 : 46, gap = 6;
+    int backW = th + 8;
+    winBtn(name_win, LV_SYMBOL_LEFT, [](lv_event_t*) { nameWindowClose(); }, 0x6c7086, 4, 3, backW, th);
+    name_ta = lv_textarea_create(name_win);
+    lv_obj_set_size(name_ta, W - backW - 12, th);
+    lv_obj_set_pos(name_ta, backW + 8, 3);
+    lv_textarea_set_one_line(name_ta, true);
+    lv_textarea_set_max_length(name_ta, 20);
+    lv_textarea_set_accepted_chars(name_ta, "abcdefghijklmnopqrstuvwxyz ");
+    lv_textarea_set_placeholder_text(name_ta, "Alarm name, e.g. school");
+    lv_textarea_set_text(name_ta, dlg_name.c_str());
+    lv_obj_set_style_text_font(name_ta, alarm_large ? &lv_font_montserrat_20 : &lv_font_montserrat_14, LV_PART_MAIN);
+    lv_obj_add_state(name_ta, LV_STATE_FOCUSED);        // shows the cursor
+
+    static const char* letters[] = {"q","w","e","r","t","y","u","i","o","p","\n","a","s","d","f","g","h","j","k","l","\n","z","x","c","v","b","n","m",""};
+    static lv_btnmatrix_ctrl_t ctrl[28];
+    for (int i = 0; i < 28; i++) ctrl[i] = (lv_btnmatrix_ctrl_t)1;
+    int ky = th + 3 + gap, kh = H - ky - ch - 2 * gap;
+    lv_obj_t* kb = lv_keyboard_create(name_win);
+    lv_obj_set_size(kb, W, kh);
+    lv_obj_align(kb, LV_ALIGN_TOP_LEFT, 0, ky);       // lv_keyboard_create aligns it to the bottom
+    lv_keyboard_set_map(kb, LV_KEYBOARD_MODE_USER_1, letters, ctrl);
+    lv_keyboard_set_mode(kb, LV_KEYBOARD_MODE_USER_1);
+    lv_obj_set_style_bg_color(kb, lv_color_hex(0x11111b), LV_PART_MAIN);
+    lv_obj_set_style_pad_all(kb, 3, LV_PART_MAIN);
+    lv_obj_set_style_pad_gap(kb, 4, LV_PART_MAIN);
+    lv_obj_set_style_border_width(kb, 0, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(kb, lv_color_hex(0x45475a), LV_PART_ITEMS);
+    lv_obj_set_style_text_color(kb, lv_color_hex(0xcdd6f4), LV_PART_ITEMS);
+    lv_obj_set_style_text_font(kb, alarm_large ? &lv_font_montserrat_28 : &lv_font_montserrat_20, LV_PART_ITEMS);
+    lv_obj_set_style_radius(kb, 8, LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(kb, lv_color_hex(0xfab387), LV_PART_ITEMS | LV_STATE_PRESSED);
+    lv_obj_set_style_text_color(kb, lv_color_hex(0x11111b), LV_PART_ITEMS | LV_STATE_PRESSED);
+    lv_keyboard_set_textarea(kb, name_ta);
+
+    // Space (wide), Delete, then OK set apart from Delete so a tap on one never lands on the other
+    int cy = H - ch - gap, gapS = 8, gapOk = 22;
+    int bw = (W - 8 - gapS - gapOk) / 6;
+    winBtn(name_win, "Space", [](lv_event_t*) { if (name_ta) lv_textarea_add_char(name_ta, ' '); }, 0xcdd6f4, 4, cy, bw * 3, ch);
+    winBtn(name_win, LV_SYMBOL_BACKSPACE, [](lv_event_t*) { if (name_ta) lv_textarea_del_char(name_ta); }, 0xfab387, 4 + bw * 3 + gapS, cy, bw, ch);
+    winBtn(name_win, LV_SYMBOL_OK, [](lv_event_t*) {
+        if (name_ta) { dlg_name = String(lv_textarea_get_text(name_ta)); dlg_name.trim(); }
+        nameButtonText();
+        nameWindowClose();
+    }, 0xa6e3a1, 4 + bw * 4 + gapS + gapOk, cy, bw * 2, ch);
+}
+
+static void name_cb(lv_event_t* e) { (void)e; nameWindowOpen(); }
+
+// A small clock face for the toggle (the symbol font has none)
+static void clockFace(lv_obj_t* parent, int d, uint32_t color) {
+    lv_obj_t* c = lv_obj_create(parent);
+    lv_obj_set_size(c, d, d);
+    lv_obj_set_style_radius(c, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(c, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(c, 2, LV_PART_MAIN);
+    lv_obj_set_style_border_color(c, lv_color_hex(color), LV_PART_MAIN);
+    lv_obj_set_style_pad_all(c, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(c, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_center(c);
+    static lv_point_t hands[3];                         // the points must outlive the line; every face is the same size
+    int m = d / 2 - 2;                                  // the centre, inside the border
+    hands[0].x = m; hands[0].y = 3; hands[1].x = m; hands[1].y = m; hands[2].x = m + d / 4; hands[2].y = m;
+    lv_obj_t* l = lv_line_create(c);
+    lv_line_set_points(l, hands, 3);
+    lv_obj_set_style_line_width(l, 2, LV_PART_MAIN);
+    lv_obj_set_style_line_rounded(l, true, LV_PART_MAIN);
+    lv_obj_set_style_line_color(l, lv_color_hex(color), LV_PART_MAIN);
 }
 
 static int maxHour() { return (ed_12h && !dlg_countdown) ? 12 : 23; }
@@ -196,6 +319,7 @@ static void dialog_save_cb(lv_event_t* e) {
         }
         alarmClock.setTime(hour, ed_m, true);
     }
+    alarmClock.setName(dlg_name);
     alarmClock.save();
     dialogClose();
     refreshAlarmUI();
@@ -301,18 +425,49 @@ static void dialogBuild() {
         btn_pm = plainBtn(set_dialog, "PM", pm_cb, 0x313244, g + fieldW + 14, ry, fieldW, rowH, fm);
     }
 
-    lv_obj_t* cd = lv_checkbox_create(set_dialog);
-    lv_checkbox_set_text(cd, "Count down");
-    lv_obj_set_style_text_font(cd, fs, LV_PART_MAIN);
-    lv_obj_set_style_text_color(cd, lv_color_hex(0xcdd6f4), LV_PART_MAIN);
-    lv_obj_set_style_pad_all(cd, 4, LV_PART_INDICATOR);
-    lv_obj_set_style_bg_color(cd, lv_color_hex(0x313244), LV_PART_INDICATOR);
-    lv_obj_set_style_bg_color(cd, lv_color_hex(0xa6e3a1), LV_PART_INDICATOR | LV_STATE_CHECKED);
-    lv_obj_set_style_border_color(cd, lv_color_hex(0xa6e3a1), LV_PART_INDICATOR | LV_STATE_CHECKED);
-    lv_obj_set_ext_click_area(cd, 10);
-    if (dlg_countdown) lv_obj_add_state(cd, LV_STATE_CHECKED);
-    lv_obj_add_event_cb(cd, dialog_countdown_cb, LV_EVENT_VALUE_CHANGED, nullptr);
-    lv_obj_set_pos(cd, g + 2, ry + rowH + g + 2);
+    // The mode toggle (down arrow: count down | clock: time of day), then the Info button that names the alarm
+    int ty = ry + rowH + g, tH = alarm_large ? 40 : 32, segW = alarm_large ? 52 : 40;
+    for (int i = 0; i < 2; i++) {
+        bool cd = i == 0, on = cd == dlg_countdown;
+        uint32_t fg = on ? 0x11111b : 0xa6adc8;
+        lv_obj_t* b = lv_btn_create(set_dialog);
+        lv_obj_set_pos(b, g + i * segW, ty);
+        lv_obj_set_size(b, segW, tH);
+        lv_obj_set_style_bg_color(b, lv_color_hex(on ? 0xcba6f7 : 0x313244), LV_PART_MAIN);
+        lv_obj_set_style_radius(b, 8, LV_PART_MAIN);
+        lv_obj_set_style_shadow_width(b, 0, LV_PART_MAIN);
+        lv_obj_set_style_pad_all(b, 0, LV_PART_MAIN);
+        lv_obj_set_ext_click_area(b, 4);
+        if (cd) {
+            lv_obj_t* l = lv_label_create(b);
+            lv_label_set_text(l, LV_SYMBOL_DOWN);
+            lv_obj_set_style_text_font(l, fm, LV_PART_MAIN);
+            lv_obj_set_style_text_color(l, lv_color_hex(fg), LV_PART_MAIN);
+            lv_obj_center(l);
+        } else {
+            clockFace(b, tH - 12, fg);
+        }
+        lv_obj_add_event_cb(b, mode_cb, LV_EVENT_CLICKED, (void*)(intptr_t)(cd ? 1 : 0));
+    }
+    int nx = g + 2 * segW + g;
+    lv_obj_t* nb = lv_btn_create(set_dialog);
+    lv_obj_set_pos(nb, nx, ty);
+    lv_obj_set_size(nb, colW + g - nx, tH);
+    lv_obj_set_style_bg_color(nb, lv_color_hex(0x89b4fa), LV_PART_MAIN);
+    lv_obj_set_style_radius(nb, 8, LV_PART_MAIN);
+    lv_obj_set_style_shadow_width(nb, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_hor(nb, 6, LV_PART_MAIN);
+    lv_obj_set_style_pad_ver(nb, 0, LV_PART_MAIN);
+    lv_obj_add_event_cb(nb, name_cb, LV_EVENT_CLICKED, nullptr);
+    name_lbl = lv_label_create(nb);
+    lv_label_set_long_mode(name_lbl, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(name_lbl, lv_pct(100));
+    lv_obj_set_height(name_lbl, lv_font_get_line_height(fs));     // one line, cut with dots
+    lv_obj_set_style_text_align(name_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+    lv_obj_set_style_text_font(name_lbl, fs, LV_PART_MAIN);
+    lv_obj_set_style_text_color(name_lbl, lv_color_hex(0x11111b), LV_PART_MAIN);
+    lv_obj_center(name_lbl);
+    nameButtonText();
 
     int kx, ky, kw, kh, by;                             // keypad box, and the y of Cancel / Save
     if (tall) {
@@ -352,11 +507,13 @@ static void dialogBuild() {
 static void set_cb(lv_event_t* e) {
     (void)e;
     if (!dlg_countdown && alarmClock.cfg().enabled && !alarmClock.cfg().repeat) dlg_countdown = true;   // a count down is running: stay in that mode
+    dlg_name = alarmClock.cfg().name;
     dialogBuild();
 }
 
 // For layout checks over the web API
-void showAlarmSetDialog(bool countdown) { dialogClose(); dlg_countdown = countdown; dialogBuild(); }
+void showAlarmSetDialog(bool countdown) { dialogClose(); dlg_countdown = countdown; dlg_name = alarmClock.cfg().name; dialogBuild(); }
+void showAlarmNameWindow() { if (set_dialog) nameWindowOpen(); }
 void closeAlarmSetDialog() { dialogClose(); }
 
 // ---- the bar on the clock tab
@@ -452,11 +609,27 @@ void showAlarmRinging() {
     lv_obj_align(ring_time, LV_ALIGN_CENTER, 0, -34);
     ringTimeNow();
 
-    lv_obj_t* song = lv_label_create(ring_overlay);
-    lv_label_set_text(song, "Wake up");
-    lv_obj_set_style_text_font(song, alarm_large ? &lv_font_montserrat_20 : &lv_font_montserrat_14, LV_PART_MAIN);
-    lv_obj_set_style_text_color(song, lv_color_hex(0xcdd6f4), LV_PART_MAIN);
-    lv_obj_align(song, LV_ALIGN_CENTER, 0, 10);
+    // The alarm's name in bold (the same text twice, a pixel apart: there is no bold font), or a plain "Wake up"
+    const String& nm = alarmClock.cfg().name;
+    if (nm.length()) {
+        int W = lv_disp_get_hor_res(nullptr);
+        for (int i = 0; i < 2; i++) {
+            lv_obj_t* l = lv_label_create(ring_overlay);
+            lv_label_set_text(l, nm.c_str());
+            lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
+            lv_obj_set_width(l, W - 20);
+            lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+            lv_obj_set_style_text_font(l, alarm_large ? &lv_font_montserrat_48 : &lv_font_montserrat_28, LV_PART_MAIN);
+            lv_obj_set_style_text_color(l, lv_color_hex(0xf5e0dc), LV_PART_MAIN);
+            lv_obj_align(l, LV_ALIGN_CENTER, i, alarm_large ? 36 : 20);
+        }
+    } else {
+        lv_obj_t* song = lv_label_create(ring_overlay);
+        lv_label_set_text(song, "Wake up");
+        lv_obj_set_style_text_font(song, alarm_large ? &lv_font_montserrat_20 : &lv_font_montserrat_14, LV_PART_MAIN);
+        lv_obj_set_style_text_color(song, lv_color_hex(0xcdd6f4), LV_PART_MAIN);
+        lv_obj_align(song, LV_ALIGN_CENTER, 0, 10);
+    }
 
     lv_obj_t* btns = lv_obj_create(ring_overlay);
     lv_obj_set_size(btns, LV_SIZE_CONTENT, LV_SIZE_CONTENT);

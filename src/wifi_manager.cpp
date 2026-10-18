@@ -900,7 +900,7 @@ void WifiManager::startWebServer() {
         if (!settings.getApiServerEnabled()) { _webServer->send(403, "text/plain", "Forbidden: API server disabled in settings"); return; }
         String page = _webServer->arg("page");
         if (page == "password") showWifiPasswordPreview(); else if (page == "zip") showZipSetup();
-        else if (page == "alarm") showAlarmSetDialog(false); else if (page == "menu") showSlideMenu(); else if (page == "qr") showQrPopup("Raina Clock on your phone", "/"); else if (page == "countdown") showAlarmSetDialog(true);
+        else if (page == "alarm") showAlarmSetDialog(false); else if (page == "menu") showSlideMenu(); else if (page == "qr") showQrPopup("Raina Clock on your phone", "/"); else if (page == "countdown") showAlarmSetDialog(true); else if (page == "name") { showAlarmSetDialog(false); showAlarmNameWindow(); }
         else { closeWifiSetup(); closeAlarmSetDialog(); hideSlideMenu(); closeQrPopup(); }
         _webServer->send(200, "text/plain", "ok");
     });

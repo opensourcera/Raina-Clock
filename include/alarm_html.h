@@ -16,7 +16,7 @@ h2 { color: #f9e2af; margin: 0 0 4px 0; font-weight: 600; text-align: center; }
 .next { text-align: center; font-size: 20px; color: #a6e3a1; margin-bottom: 18px; }
 .next.ring { color: #f38ba8; }
 label { display: block; margin-bottom: 6px; color: #a6adc8; font-size: 14px; }
-input[type='time'], input[type='number'], select { width: 100%; padding: 10px; margin-bottom: 16px; border-radius: 6px; border: 1px solid #45475a; background: #313244; color: #cdd6f4; font-size: 16px; box-sizing: border-box; }
+input[type='time'], input[type='text'], input[type='number'], select { width: 100%; padding: 10px; margin-bottom: 16px; border-radius: 6px; border: 1px solid #45475a; background: #313244; color: #cdd6f4; font-size: 16px; box-sizing: border-box; }
 input[type='range'] { width: 100%; margin-bottom: 16px; }
 .row { display: flex; gap: 8px; margin-bottom: 16px; }
 .row button { flex: 1; }
@@ -39,6 +39,9 @@ button.danger { background: #f38ba8; }
 <h2>Alarm</h2>
 <p class='sub'>Rings on the clock. Snooze and Stop are on its screen.</p>
 <div id='next' class='next'>...</div>
+
+<label for='name'>Name (shown in bold when it rings)</label>
+<input type='text' id='name' maxlength='20' placeholder='wake up' autocapitalize='none' oninput='this.value=this.value.toLowerCase().replace(/[^a-z ]/g,"")'>
 
 <div class='section'>Wake me in</div>
 <div class='row'>
@@ -75,6 +78,7 @@ async function load() {
   const a = await (await fetch('/api/alarm')).json();
   const n = $('next'); n.textContent = a.ringing ? 'Ringing now' : a.next; n.className = 'next' + (a.ringing ? ' ring' : '');
   $('time').value = String(a.hour).padStart(2, '0') + ':' + String(a.minute).padStart(2, '0');
+  if (document.activeElement !== $('name')) $('name').value = a.name || '';
   $('repeat').checked = a.repeat; $('enabled').checked = a.enabled;
   $('volume').value = a.volume; $('volv').textContent = a.volume + '%'; $('snooze').value = a.snooze_minutes;
 }
@@ -84,10 +88,10 @@ async function post(body) {
   if (!r.ok) alert('The clock refused it: ' + await r.text());
   await load();
 }
-function inHours(h) { post({in_hours: h}); }
+function inHours(h) { post({name: $('name').value, in_hours: h}); }
 function save() {
   const [h, m] = $('time').value.split(':').map(Number);
-  post({hour: h, minute: m, repeat: $('repeat').checked, enabled: $('enabled').checked, volume: Number($('volume').value), snooze_minutes: Number($('snooze').value)});
+  post({name: $('name').value, hour: h, minute: m, repeat: $('repeat').checked, enabled: $('enabled').checked, volume: Number($('volume').value), snooze_minutes: Number($('snooze').value)});
 }
 async function test() { await fetch('/api/alarm/test', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({volume: Number($('volume').value)})}); $('status').textContent = 'Beeping on the clock.'; }
 async function stopSound() { await fetch('/api/alarm/stop', {method: 'POST'}); $('status').textContent = 'Stopped.'; }

@@ -14,6 +14,7 @@ struct AlarmConfig {
     bool repeat = true;        // daily; false: one shot, switched off after it rings
     int snoozeMinutes = 9;
     int volume = 80;           // 0-100
+    String name;               // shown in bold while it rings; lower case letters and spaces, up to 20
 };
 
 class AlarmManager {
@@ -26,6 +27,7 @@ public:
     void setEnabled(bool on);
     void setSnoozeMinutes(int m);
     void setVolume(int pct);
+    void setName(const String& n);
 
     bool isDue(const struct tm& now);                       // true once when it should start ringing
     void snooze(const struct tm& now);

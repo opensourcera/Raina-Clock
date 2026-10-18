@@ -17,6 +17,7 @@ void AlarmManager::begin() {
     _c.repeat = prefs.getBool("rep", true);
     _c.snoozeMinutes = prefs.getInt("snz", 9);
     _c.volume = prefs.getInt("vol", 80);
+    _c.name = prefs.getString("nm", "");
     prefs.end();
     _changed = true;
 }
@@ -30,6 +31,7 @@ void AlarmManager::save() {
     prefs.putBool("rep", _c.repeat);
     prefs.putInt("snz", _c.snoozeMinutes);
     prefs.putInt("vol", _c.volume);
+    prefs.putString("nm", _c.name);
     prefs.end();
     configBackupSave();
 }
@@ -51,6 +53,19 @@ void AlarmManager::setInHours(float hours, const struct tm& now) {
 void AlarmManager::setEnabled(bool on) { _c.enabled = on; if (!on) { _snoozeKey = -1; _ringing = false; } _changed = true; }
 void AlarmManager::setSnoozeMinutes(int m) { if (m >= 1 && m <= 60) { _c.snoozeMinutes = m; _changed = true; } }
 void AlarmManager::setVolume(int pct) { if (pct >= 0 && pct <= 100) { _c.volume = pct; _changed = true; } }
+
+// Lower case letters and single spaces only, as the keyboard on the clock types them
+void AlarmManager::setName(const String& n) {
+    String out;
+    for (size_t i = 0; i < n.length() && out.length() < 20; i++) {
+        char c = n[i];
+        if (c >= 'A' && c <= 'Z') c = c - 'A' + 'a';
+        if (c >= 'a' && c <= 'z') out += c;
+        else if (c == ' ' && out.length() && !out.endsWith(" ")) out += c;
+    }
+    out.trim();
+    if (out != _c.name) { _c.name = out; _changed = true; }
+}
 
 bool AlarmManager::isDue(const struct tm& now) {
     if (_ringing) return false;
@@ -111,6 +126,7 @@ String AlarmManager::toJson(const struct tm* now, bool use24h) const {
     doc["repeat"] = _c.repeat;
     doc["snooze_minutes"] = _c.snoozeMinutes;
     doc["volume"] = _c.volume;
+    doc["name"] = _c.name;
     doc["ringing"] = _ringing;
     doc["snoozed"] = _snoozeKey >= 0;
     if (now) doc["next"] = nextText(*now, use24h);   // a String is copied; .c_str() of a temporary would dangle
@@ -122,6 +138,7 @@ String AlarmManager::toJson(const struct tm* now, bool use24h) const {
 bool AlarmManager::applyJson(const String& json, const struct tm* now) {
     DynamicJsonDocument doc(512);
     if (deserializeJson(doc, json.c_str())) return false;
+    if (doc.containsKey("name")) setName(doc["name"].as<String>());
     if (doc.containsKey("in_hours") && now) { setInHours(doc["in_hours"].as<float>(), *now); return true; }
     int hour = doc["hour"] | _c.hour, minute = doc["minute"] | _c.minute;
     if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return false;
