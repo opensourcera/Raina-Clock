@@ -1,6 +1,7 @@
 #include "ui.h"
 #include "ui_todo.h"
 #include "ui_weather.h"
+#include "ui_qr.h"
 #include "ui_menu.h"
 #include "ui_trip.h"
 #include "ui_wifi.h"
@@ -598,9 +599,14 @@ void initUI() {
         LV_IMG_DECLARE(raina_logo);
         lv_obj_t * logo = lv_img_create(header);
         lv_img_set_src(logo, &raina_logo);
+        lv_obj_add_flag(logo, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_ext_click_area(logo, 8);
+        lv_obj_add_event_cb(logo, [](lv_event_t * e) { (void)e; showQrPopup("Raina Clock on your phone", "/"); }, LV_EVENT_CLICKED, nullptr);
         lv_obj_align(logo, LV_ALIGN_LEFT_MID, 6, 0);
     }
     lv_label_set_text(header_title, "Raina Clock");
+    lv_obj_add_flag(header_title, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(header_title, [](lv_event_t * e) { (void)e; showQrPopup("Raina Clock on your phone", "/"); }, LV_EVENT_CLICKED, nullptr);
     lv_obj_set_style_text_font(header_title, &lv_font_montserrat_20, LV_PART_MAIN);
     lv_obj_set_style_text_color(header_title, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).text), LV_PART_MAIN);
     lv_obj_align(header_title, LV_ALIGN_LEFT_MID, 48, 0);
@@ -1093,10 +1099,10 @@ void initUI() {
     // The upstream code keeps building rows into left_col / right_col; flush_settings() moves everything built so
     // far into the page chosen for that section; the next call announces the page of the next section.
     // Page -1 is a hidden holder for the upstream dropdowns and switch that the radio buttons replace.
-    int side_w = isLargeScreen ? 124 : 92, back_h = isLargeScreen ? 52 : 40;   // the section list on the left, Back on top of it
+    int side_w = isLargeScreen ? 132 : 100, bar_h = isLargeScreen ? 50 : 38;   // the section list on the left, under a status bar
     lv_obj_t * set_tabs = lv_tabview_create(tab_settings, LV_DIR_LEFT, side_w);
-    lv_obj_set_size(set_tabs, lv_pct(100), lv_pct(100));
-    lv_obj_align(set_tabs, LV_ALIGN_TOP_LEFT, 0, 0);
+    lv_obj_set_size(set_tabs, lv_pct(100), lv_disp_get_ver_res(NULL) - bar_h);
+    lv_obj_align(set_tabs, LV_ALIGN_TOP_LEFT, 0, bar_h);
     lv_obj_set_style_bg_opa(set_tabs, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_style_pad_all(set_tabs, 0, LV_PART_MAIN);
     lv_obj_set_style_border_width(set_tabs, 0, LV_PART_MAIN);
@@ -1110,30 +1116,55 @@ void initUI() {
         lv_obj_set_style_text_font(sb, isLargeScreen ? &lv_font_montserrat_20 : &lv_font_montserrat_14, LV_PART_ITEMS);
         lv_obj_set_style_pad_left(sb, 0, LV_PART_ITEMS);
         lv_obj_set_style_pad_right(sb, 0, LV_PART_ITEMS);
-        lv_obj_set_style_pad_top(sb, back_h + 4, LV_PART_MAIN);
+        lv_obj_set_style_pad_top(sb, 4, LV_PART_MAIN);
         lv_obj_set_style_pad_row(sb, 2, LV_PART_MAIN);
         lv_obj_set_style_radius(sb, 8, LV_PART_ITEMS);
     }
-    {
-        lv_obj_t * back = lv_btn_create(tab_settings);
-        lv_obj_set_size(back, side_w - 8, back_h);
-        lv_obj_set_pos(back, 4, 4);
-        lv_obj_set_style_bg_color(back, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).surface0), LV_PART_MAIN);
-        lv_obj_set_style_radius(back, 10, LV_PART_MAIN);
-        lv_obj_set_style_shadow_width(back, 0, LV_PART_MAIN);
-        lv_obj_t * bl = lv_label_create(back);
-        lv_label_set_text(bl, LV_SYMBOL_LEFT " Back");
-        lv_obj_set_style_text_font(bl, isLargeScreen ? &lv_font_montserrat_20 : &lv_font_montserrat_14, LV_PART_MAIN);
-        lv_obj_set_style_text_color(bl, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).text), LV_PART_MAIN);
-        lv_obj_center(bl);
+    {   // status bar: Back to the clock, the title, and the QR code of the settings web page
+        const auto & fl = getCatppuccinFlavor(getCurrentThemeFlavor());
+        const lv_font_t * bf = isLargeScreen ? &lv_font_montserrat_20 : &lv_font_montserrat_14;
+        lv_obj_t * bar = lv_obj_create(tab_settings);
+        lv_obj_set_size(bar, lv_pct(100), bar_h);
+        lv_obj_set_pos(bar, 0, 0);
+        lv_obj_set_style_bg_color(bar, TO_LV_COLOR(fl.crust), LV_PART_MAIN);
+        lv_obj_set_style_border_width(bar, 0, LV_PART_MAIN);
+        lv_obj_set_style_radius(bar, 0, LV_PART_MAIN);
+        lv_obj_set_style_pad_all(bar, 4, LV_PART_MAIN);
+        lv_obj_clear_flag(bar, LV_OBJ_FLAG_SCROLLABLE);
+        auto barBtn = [&](const char * text, lv_align_t al) {
+            lv_obj_t * b = lv_btn_create(bar);
+            lv_obj_set_height(b, bar_h - 8);
+            lv_obj_set_style_pad_hor(b, isLargeScreen ? 16 : 12, LV_PART_MAIN);
+            lv_obj_set_style_bg_color(b, TO_LV_COLOR(fl.surface0), LV_PART_MAIN);
+            lv_obj_set_style_radius(b, 8, LV_PART_MAIN);
+            lv_obj_set_style_shadow_width(b, 0, LV_PART_MAIN);
+            lv_obj_t * l = lv_label_create(b);
+            lv_label_set_text(l, text);
+            lv_obj_set_style_text_font(l, bf, LV_PART_MAIN);
+            lv_obj_set_style_text_color(l, TO_LV_COLOR(fl.text), LV_PART_MAIN);
+            lv_obj_center(l);
+            lv_obj_align(b, al, 0, 0);
+            return b;
+        };
+        lv_obj_t * back = barBtn(LV_SYMBOL_LEFT " Back", LV_ALIGN_LEFT_MID);
         lv_obj_add_event_cb(back, [](lv_event_t * e) { (void)e; if (tabview_obj) lv_tabview_set_act(tabview_obj, 4, LV_ANIM_OFF); }, LV_EVENT_CLICKED, nullptr);
+        lv_obj_t * qr = barBtn("QR", LV_ALIGN_RIGHT_MID);
+        lv_obj_add_event_cb(qr, [](lv_event_t * e) { (void)e; showQrPopup("Settings on your phone", "/settings"); }, LV_EVENT_CLICKED, nullptr);
+        lv_obj_t * title = lv_label_create(bar);
+        lv_label_set_text(title, "Setup");
+        lv_obj_set_style_text_font(title, bf, LV_PART_MAIN);
+        lv_obj_set_style_text_color(title, TO_LV_COLOR(fl.peach), LV_PART_MAIN);
+        lv_obj_center(title);
     }
     // Page 2 (Disp) is gone: its time zone and 24-hour rows live on Look; orientation and the title switch are dropped
-    const char * set_names[7] = {LV_SYMBOL_WIFI " Net", LV_SYMBOL_IMAGE " Look", nullptr, LV_SYMBOL_EYE_OPEN " Light",
-                                 LV_SYMBOL_POWER " Night", LV_SYMBOL_SD_CARD " Data", LV_SYMBOL_GPS " Sens"};
-    lv_obj_t * set_pg[7];
-    for (int i = 0; i < 7; i++) {
-        if (set_names[i] == nullptr) { set_pg[i] = nullptr; continue; }
+    // Pages: 0 Network, 7 Weather, 8 Audio, 1 Look, 6 System, in that order down the sidebar. 3 (Light) folds into
+    // Look; 2, 4 (Night) and 5 (Data) are not shown: what is built for them goes to the hidden holder.
+    const char * set_names[9] = {LV_SYMBOL_WIFI " Network", LV_SYMBOL_IMAGE " Look", nullptr, nullptr, nullptr, nullptr,
+                                 LV_SYMBOL_SETTINGS " System", LV_SYMBOL_GPS " Weather", LV_SYMBOL_VOLUME_MAX " Audio"};
+    const int set_order[5] = {0, 7, 8, 1, 6};
+    lv_obj_t * set_pg[9] = {nullptr};
+    for (int k = 0; k < 5; k++) {
+        int i = set_order[k];
         set_pg[i] = lv_tabview_add_tab(set_tabs, set_names[i]);
         lv_obj_set_style_bg_color(set_pg[i], TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).base), LV_PART_MAIN);
         lv_obj_set_style_pad_all(set_pg[i], 4, LV_PART_MAIN);
@@ -1141,22 +1172,12 @@ void initUI() {
         lv_obj_set_flex_flow(set_pg[i], i == 6 ? LV_FLEX_FLOW_COLUMN : LV_FLEX_FLOW_ROW_WRAP);
         lv_obj_set_scrollbar_mode(set_pg[i], i == 6 ? LV_SCROLLBAR_MODE_AUTO : LV_SCROLLBAR_MODE_OFF);
     }
+    set_pg[3] = set_pg[1];
     settings_tabs_obj = set_tabs;
     lv_obj_t * set_junk = lv_obj_create(tab_settings);
     lv_obj_add_flag(set_junk, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_size(set_junk, 1, 1);
 
-    // The radio choices go in first, so they lead their pages
-    {
-        const char * themes[4] = {"Mocha", "Macchiato", "Frappe", "Latte"};
-        for (int i = 0; i < 4; i++) make_radio(set_pg[1], themes[i], 1, i, settings.getThemeFlavor() == i + 1, isLargeScreen);
-        make_radio(set_pg[1], "\xC2\xB0" "F", 2, 0, settings.getUnitSystem() == UNIT_IMPERIAL, isLargeScreen);
-        make_radio(set_pg[1], "\xC2\xB0" "C", 2, 1, settings.getUnitSystem() != UNIT_IMPERIAL, isLargeScreen);
-        const char * orients[4] = {"Landscape", "Portrait", "Land. flip", "Port. flip"};
-        int cur_rot = settings.getScreenOrientation();
-        int cur_idx = (cur_rot >= 0 && cur_rot < 4) ? rotation_to_dropdown[cur_rot] : 0;
-        (void)orients; (void)cur_idx;                    // no orientation choice any more
-    }
 
     int set_cur_page = 0;
     auto flush_settings = [&](int next_page) {
@@ -1164,11 +1185,11 @@ void initUI() {
         for (int c = 0; c < 2; c++) {
             while (lv_obj_get_child_cnt(cols[c]) > 0) {
                 lv_obj_t * ch = lv_obj_get_child(cols[c], 0);
-                if (set_cur_page < 0) { lv_obj_set_parent(ch, set_junk); continue; }
+                if (set_cur_page < 0 || set_pg[set_cur_page] == nullptr) { lv_obj_set_parent(ch, set_junk); continue; }
                 lv_obj_set_parent(ch, set_pg[set_cur_page]);
                 bool plain = lv_obj_check_type(ch, &lv_slider_class) || lv_obj_check_type(ch, &lv_label_class);
-                bool half = !plain && (lv_obj_check_type(ch, &lv_checkbox_class) || lv_obj_check_type(ch, &lv_btn_class));
-                lv_obj_set_width(ch, lv_pct(half ? 48 : 100));   // radio choices and buttons two per row, switch rows full width
+                (void)plain;
+                lv_obj_set_width(ch, lv_pct(100));               // one row each
                 if (lv_obj_check_type(ch, &lv_slider_class)) {    // the knob stands out past the ends: keep it on screen
                     lv_obj_set_width(ch, lv_pct(88));
                     lv_obj_set_style_translate_x(ch, 10, LV_PART_MAIN);
@@ -1183,10 +1204,30 @@ void initUI() {
     // Wi-Fi setup button (cyd-alarm-clock): scan, pick, type the password on screen
     flush_settings(0);
     createWifiSettingsButton(left_col, isLargeScreen);
+    {   // Bluetooth: this firmware has no Bluetooth (its memory goes to Wi-Fi and the screen); say so plainly
+        lv_obj_t * row = lv_obj_create(left_col);
+        lv_obj_set_size(row, lv_pct(100), LV_SIZE_CONTENT);
+        lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, LV_PART_MAIN);
+        lv_obj_set_style_border_width(row, 0, LV_PART_MAIN);
+        lv_obj_set_style_pad_all(row, 4, LV_PART_MAIN);
+        lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_t * l = lv_label_create(row);
+        lv_label_set_text(l, LV_SYMBOL_BLUETOOTH " Bluetooth");
+        lv_obj_set_style_text_font(l, isLargeScreen ? &lv_font_montserrat_20 : &lv_font_montserrat_14, LV_PART_MAIN);
+        lv_obj_set_style_text_color(l, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).text), LV_PART_MAIN);
+        lv_obj_t * n = lv_label_create(row);
+        lv_label_set_text(n, "not available");
+        lv_obj_set_style_text_font(n, isLargeScreen ? &lv_font_montserrat_14 : &lv_font_montserrat_10, LV_PART_MAIN);
+        lv_obj_set_style_text_color(n, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).overlay0), LV_PART_MAIN);
+    }
+    flush_settings(7);
     createZipSettingsButton(left_col, isLargeScreen);
+    flush_settings(8);
     createAlarmTestControls(left_col, isLargeScreen);   // Test sound start/stop and the alarm volume
 
-    flush_settings(-1);
+    flush_settings(1);
     // Unit (C/F) row
     lv_obj_t * unit_row = lv_obj_create(left_col);
     lv_obj_clear_flag(unit_row, LV_OBJ_FLAG_CLICKABLE);
@@ -1199,7 +1240,7 @@ void initUI() {
     lv_obj_clear_flag(unit_row, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t * unit_label = lv_label_create(unit_row);
-    lv_label_set_text(unit_label, "Unit (C/F)");
+    lv_label_set_text(unit_label, "Temperature in \xC2\xB0" "F");
     lv_obj_set_style_text_color(unit_label, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).text), LV_PART_MAIN);
     lv_obj_set_style_text_font(unit_label, isLargeScreen ? &lv_font_montserrat_20 : &lv_font_montserrat_14, LV_PART_MAIN);
 
@@ -1378,7 +1419,7 @@ void initUI() {
     }
     lv_obj_add_event_cb(ui_sw_local_sensor, local_sensor_sw_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
-    flush_settings(3);
+    flush_settings(-1);
     // Screensaver row
     lv_obj_t * saver_row = lv_obj_create(left_col);
     lv_obj_clear_flag(saver_row, LV_OBJ_FLAG_CLICKABLE);
@@ -1552,7 +1593,7 @@ void initUI() {
     }
     lv_obj_add_event_cb(ui_auto_bright_sw, auto_sw_event_cb, LV_EVENT_VALUE_CHANGED, ui_brightness_slider);
 
-    flush_settings(1);   // the time zone lives on the Look page
+    flush_settings(7);   // the time zone lives on the Weather page
     // Timezone label
     lv_obj_t * tz_label = lv_label_create(right_col);
     lv_label_set_text(tz_label, "Timezone");
@@ -1631,7 +1672,7 @@ void initUI() {
     lv_obj_add_event_cb(ui_24h_sw, use_24h_sw_event_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
 
-    flush_settings(-1);
+    flush_settings(1);
     // Theme selector dropdown
     lv_obj_t * theme_dropdown = lv_dropdown_create(right_col);
     lv_obj_set_size(theme_dropdown, lv_pct(92), 26);
@@ -1708,15 +1749,24 @@ void initUI() {
     lv_obj_set_style_bg_color(ui_slider_local_sensor_update_interval, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).crust), LV_PART_KNOB);
 
     // Temperature Offset Text Area
-    lv_obj_t * temp_offset_lbl = lv_label_create(right_col);
-    lv_label_set_text(temp_offset_lbl, "Temperature Offset");
+    lv_obj_t * temp_offset_lbl_row = lv_obj_create(right_col);
+    lv_obj_set_size(temp_offset_lbl_row, lv_pct(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(temp_offset_lbl_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(temp_offset_lbl_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_bg_opa(temp_offset_lbl_row, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(temp_offset_lbl_row, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(temp_offset_lbl_row, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(temp_offset_lbl_row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_t * temp_offset_lbl = lv_label_create(temp_offset_lbl_row);
+    lv_label_set_text(temp_offset_lbl, "Temp offset");
     lv_obj_set_style_text_color(temp_offset_lbl, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).text), LV_PART_MAIN);
     lv_obj_set_style_text_font(temp_offset_lbl, isLargeScreen ? &lv_font_montserrat_20 : &lv_font_montserrat_14, LV_PART_MAIN);
 
-    ui_ta_temp_offset = lv_textarea_create(right_col);
+    ui_ta_temp_offset = lv_textarea_create(temp_offset_lbl_row);
     lv_textarea_set_one_line(ui_ta_temp_offset, true);
     lv_textarea_set_accepted_chars(ui_ta_temp_offset, "0123456789.-");
-    lv_obj_set_size(ui_ta_temp_offset, lv_pct(92), LV_SIZE_CONTENT);
+    lv_obj_set_size(ui_ta_temp_offset, isLargeScreen ? 130 : 96, LV_SIZE_CONTENT);   // room for "-123.45"
+    lv_textarea_set_max_length(ui_ta_temp_offset, 8);
     char ta_buf[16];
     snprintf(ta_buf, sizeof(ta_buf), "%.1f", settings.getLocalSensorTempOffset());
     lv_textarea_set_text(ui_ta_temp_offset, ta_buf);
@@ -1725,22 +1775,39 @@ void initUI() {
     lv_obj_set_style_text_color(ui_ta_temp_offset, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).text), LV_PART_MAIN);
 
     // Humidity Offset Text Area
-    lv_obj_t * hum_offset_lbl = lv_label_create(right_col);
-    lv_label_set_text(hum_offset_lbl, "Humidity Offset");
+    lv_obj_t * hum_offset_lbl_row = lv_obj_create(right_col);
+    lv_obj_set_size(hum_offset_lbl_row, lv_pct(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(hum_offset_lbl_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(hum_offset_lbl_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_bg_opa(hum_offset_lbl_row, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(hum_offset_lbl_row, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(hum_offset_lbl_row, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(hum_offset_lbl_row, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_t * hum_offset_lbl = lv_label_create(hum_offset_lbl_row);
+    lv_label_set_text(hum_offset_lbl, "Humidity offset");
     lv_obj_set_style_text_color(hum_offset_lbl, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).text), LV_PART_MAIN);
     lv_obj_set_style_text_font(hum_offset_lbl, isLargeScreen ? &lv_font_montserrat_20 : &lv_font_montserrat_14, LV_PART_MAIN);
 
-    ui_ta_hum_offset = lv_textarea_create(right_col);
+    ui_ta_hum_offset = lv_textarea_create(hum_offset_lbl_row);
     lv_textarea_set_one_line(ui_ta_hum_offset, true);
     lv_textarea_set_accepted_chars(ui_ta_hum_offset, "0123456789.-");
-    lv_obj_set_size(ui_ta_hum_offset, lv_pct(92), LV_SIZE_CONTENT);
+    lv_obj_set_size(ui_ta_hum_offset, isLargeScreen ? 130 : 96, LV_SIZE_CONTENT);   // room for "-123.45"
+    lv_textarea_set_max_length(ui_ta_hum_offset, 8);
     snprintf(ta_buf, sizeof(ta_buf), "%.1f", settings.getLocalSensorHumOffset());
     lv_textarea_set_text(ui_ta_hum_offset, ta_buf);
     lv_obj_add_event_cb(ui_ta_hum_offset, ta_event_cb, LV_EVENT_ALL, NULL);
     lv_obj_set_style_bg_color(ui_ta_hum_offset, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).mantle), LV_PART_MAIN);
     lv_obj_set_style_text_color(ui_ta_hum_offset, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).text), LV_PART_MAIN);
 
+    {
+        lv_obj_t * ver = lv_label_create(right_col);
+        lv_label_set_text(ver, "Raina Clock " APP_VERSION);
+        lv_obj_set_style_text_font(ver, isLargeScreen ? &lv_font_montserrat_14 : &lv_font_montserrat_10, LV_PART_MAIN);
+        lv_obj_set_style_text_color(ver, TO_LV_COLOR(getCatppuccinFlavor(getCurrentThemeFlavor()).overlay0), LV_PART_MAIN);
+        lv_obj_set_style_pad_top(ver, 6, LV_PART_MAIN);
+    }
     flush_settings(6);
+    lv_obj_move_to_index(theme_dropdown, 0);            // Look: the theme first
     {   // Light page: the brightness label and slider lead
         lv_obj_t * lp = set_pg[3];
         lv_obj_t * lead[4]; int nl = 0;
@@ -1748,7 +1815,7 @@ void initUI() {
             lv_obj_t * ch = lv_obj_get_child(lp, i);
             if (lv_obj_check_type(ch, &lv_slider_class) || lv_obj_check_type(ch, &lv_label_class)) lead[nl++] = ch;
         }
-        for (int i = nl - 1; i >= 0; i--) lv_obj_move_to_index(lead[i], 0);
+        for (int i = nl - 1; i >= 0; i--) lv_obj_move_to_index(lead[i], 1);   // after the theme
     }
     // Re-apply offline indicator state if active
     if (is_offline_mode) {

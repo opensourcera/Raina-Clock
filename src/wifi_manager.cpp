@@ -28,6 +28,7 @@ extern SettingsManager settings;
 #include "ui_wifi.h"
 #include "ui_alarm.h"
 #include "ui_menu.h"
+#include "ui_qr.h"
 #ifndef NATIVE_TEST
 #include "todo_html.h"
 #include "alarm_html.h"
@@ -899,8 +900,8 @@ void WifiManager::startWebServer() {
         if (!settings.getApiServerEnabled()) { _webServer->send(403, "text/plain", "Forbidden: API server disabled in settings"); return; }
         String page = _webServer->arg("page");
         if (page == "password") showWifiPasswordPreview(); else if (page == "zip") showZipSetup();
-        else if (page == "alarm") showAlarmSetDialog(false); else if (page == "menu") showSlideMenu(); else if (page == "countdown") showAlarmSetDialog(true);
-        else { closeWifiSetup(); closeAlarmSetDialog(); hideSlideMenu(); }
+        else if (page == "alarm") showAlarmSetDialog(false); else if (page == "menu") showSlideMenu(); else if (page == "qr") showQrPopup("Raina Clock on your phone", "/"); else if (page == "countdown") showAlarmSetDialog(true);
+        else { closeWifiSetup(); closeAlarmSetDialog(); hideSlideMenu(); closeQrPopup(); }
         _webServer->send(200, "text/plain", "ok");
     });
     _webServer->on("/api/settings_tab", [this]() {

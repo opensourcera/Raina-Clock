@@ -7,7 +7,7 @@
 #include <WiFi.h>
 #include <vector>
 #include <algorithm>
-#include "src/extra/libs/qrcode/qrcodegen.h"
+#include "ui_qr.h"
 
 extern SettingsManager settings;
 int getCurrentThemeFlavor();   // catppuccin.cpp
@@ -22,51 +22,17 @@ static lv_obj_t* qr_obj = nullptr;
 static bool todo_large = false;
 static const int TODO_SHOW_CHARS = 30;
 
-// ---- the QR code: computed into a small bit buffer, drawn module by module (no image buffer needed)
+// ---- the QR code: it follows the clock's address, which may arrive after the page is built
 
-static uint8_t qr_code[qrcodegen_BUFFER_LEN_FOR_VERSION(4)];
-static bool qr_ok = false;
 static String qr_url;
-
 static void qrMake() {
     String url = WiFi.status() == WL_CONNECTED ? "http://" + WiFi.localIP().toString() + "/todo" : String("");
-    if (url == qr_url) return;
+    if (url == qr_url || qr_obj == nullptr) return;
     qr_url = url;
-    qr_ok = false;
-    if (url.length()) {
-        uint8_t tmp[qrcodegen_BUFFER_LEN_FOR_VERSION(4)];
-        qr_ok = qrcodegen_encodeText(url.c_str(), tmp, qr_code, qrcodegen_Ecc_LOW, 1, 4, qrcodegen_Mask_AUTO, true);
-    }
-    if (qr_obj) {
-        if (qr_ok) lv_obj_clear_flag(qr_obj, LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(qr_obj, LV_OBJ_FLAG_HIDDEN);
-        lv_obj_invalidate(qr_obj);
-    }
+    qrSetText(qr_obj, url.c_str());
+    if (url.length()) lv_obj_clear_flag(qr_obj, LV_OBJ_FLAG_HIDDEN); else lv_obj_add_flag(qr_obj, LV_OBJ_FLAG_HIDDEN);
 }
-
-static void qr_draw_cb(lv_event_t* e) {
-    if (!qr_ok) return;
-    lv_obj_t* obj = lv_event_get_target(e);
-    lv_draw_ctx_t* ctx = lv_event_get_draw_ctx(e);
-    lv_area_t a; lv_obj_get_coords(obj, &a);
-    int n = qrcodegen_getSize(qr_code);
-    int px = (lv_area_get_width(&a) - 4) / (n + 2);            // a two-module quiet zone around it
-    if (px < 1) px = 1;
-    int x0 = a.x1 + (lv_area_get_width(&a) - px * n) / 2, y0 = a.y1 + (lv_area_get_height(&a) - px * n) / 2;
-    lv_draw_rect_dsc_t d; lv_draw_rect_dsc_init(&d);
-    d.bg_color = lv_color_black(); d.bg_opa = LV_OPA_COVER;
-    for (int y = 0; y < n; y++) {
-        for (int x = 0; x < n; x++) {
-            if (!qrcodegen_getModule(qr_code, x, y)) continue;
-            int run = 1;                                            // dark modules side by side: one rectangle
-            while (x + run < n && qrcodegen_getModule(qr_code, x + run, y)) run++;
-            lv_area_t r = {(lv_coord_t)(x0 + x * px), (lv_coord_t)(y0 + y * px), (lv_coord_t)(x0 + (x + run) * px - 1), (lv_coord_t)(y0 + (y + 1) * px - 1)};
-            lv_draw_rect(ctx, &d, &r);
-            x += run - 1;
-        }
-    }
-}
-
-static void qr_timer_cb(lv_timer_t* t) { (void)t; qrMake(); }   // the address may come later than the page
+static void qr_timer_cb(lv_timer_t* t) { (void)t; qrMake(); }
 
 // ---- the list
 
@@ -95,15 +61,8 @@ void createTodoTab(lv_obj_t* tab, bool isLandscape, bool isLargeScreen) {
 
     int W = lv_disp_get_hor_res(nullptr);
     int qrW = isLargeScreen ? 120 : 84;
-    qr_obj = lv_obj_create(tab);
-    lv_obj_set_size(qr_obj, qrW, qrW);
+    qr_obj = qrCreate(tab, qrW);
     lv_obj_align(qr_obj, LV_ALIGN_TOP_RIGHT, -6, 6);
-    lv_obj_set_style_bg_color(qr_obj, lv_color_white(), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(qr_obj, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_border_width(qr_obj, 0, LV_PART_MAIN);
-    lv_obj_set_style_radius(qr_obj, 6, LV_PART_MAIN);
-    lv_obj_clear_flag(qr_obj, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_event_cb(qr_obj, qr_draw_cb, LV_EVENT_DRAW_MAIN_END, nullptr);
     lv_obj_t* cap = lv_label_create(tab);
     lv_label_set_text(cap, "Plan on\nyour phone");
     lv_obj_set_style_text_align(cap, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
