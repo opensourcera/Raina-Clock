@@ -309,8 +309,7 @@ void showAlarmRinging() {
     ringTimeNow();
 
     lv_obj_t* song = lv_label_create(ring_overlay);
-    String what = audio.nowPlaying();
-    lv_label_set_text(song, what.length() ? what.c_str() : "Wake up");
+    lv_label_set_text(song, "Wake up");
     lv_obj_set_style_text_font(song, alarm_large ? &lv_font_montserrat_20 : &lv_font_montserrat_14, LV_PART_MAIN);
     lv_obj_set_style_text_color(song, lv_color_hex(0xcdd6f4), LV_PART_MAIN);
     lv_obj_align(song, LV_ALIGN_CENTER, 0, 10);
@@ -343,17 +342,10 @@ void alarmRingingSetTime(const char* time_str) {
     ringTimeNow();
 }
 
-// The alarm sound is either the chosen song from the SD card or the plain beep. A missing card or file, or a decoder
-// that will not start, falls back to the beep, so the alarm always makes noise.
-static bool playAlarmSound(bool loop) {
-    const AlarmConfig& c = alarmClock.cfg();
-    audio.setVolume(c.volume);
-    if (c.song == "beep") { audio.playBeep(loop); return true; }
-    String path = String(AudioPlayer::musicDir()) + "/" + c.song;
-    if (audio.playFile(path, loop)) return true;
-    eventLog("alarm: %s is not available, using the beep", c.song.c_str());
+// The alarm signal is the beep: no card, no decoder, so it cannot fail.
+static void playAlarmSound(bool loop) {
+    audio.setVolume(alarmClock.cfg().volume);
     audio.playBeep(loop);
-    return false;
 }
 
 void testPlayAlarmSound(bool loop) { playAlarmSound(loop); }
@@ -370,7 +362,7 @@ static void ring_guard_cb(lv_timer_t* t) {
 
 void startAlarmRinging() {
     const AlarmConfig& c = alarmClock.cfg();
-    eventLog("alarm: ringing (song %s, volume %d%%)", c.song.c_str(), c.volume);
+    eventLog("alarm: ringing (volume %d%%)", c.volume);
     screensaver.wake();
     playAlarmSound(true);
     ring_t0 = millis();
@@ -433,50 +425,41 @@ static void vol_cb(lv_event_t* e) {
     }
 }
 
-static lv_obj_t* snd_lbl = nullptr;
-static void snd_update() {
-    if (snd_lbl) lv_label_set_text(snd_lbl, alarmClock.cfg().song == "beep" ? "Alarm sound: Beep" : "Alarm sound: Music");
-}
-static void snd_cb(lv_event_t* e) {
-    (void)e;
-    audio.stop(); test_on = false; test_update_label();
-    alarmClock.setSong(alarmClock.cfg().song == "beep" ? String("fur_elise.mp3") : String("beep"));
-    alarmClock.save();
-    snd_update();
-}
-
 void createAlarmTestControls(lv_obj_t* parent, bool isLargeScreen) {
     alarm_large = isLargeScreen;
     if (test_timer) { lv_timer_del(test_timer); test_timer = nullptr; }
     test_on = audio.isPlaying();
+    const lv_font_t* f = isLargeScreen ? &lv_font_montserrat_20 : &lv_font_montserrat_14;
 
-    test_btn = lv_btn_create(parent);
-    lv_obj_set_size(test_btn, lv_pct(100), isLargeScreen ? 52 : 38);
-    lv_obj_set_style_radius(test_btn, 8, LV_PART_MAIN);
-    lv_obj_set_style_shadow_width(test_btn, 0, LV_PART_MAIN);
-    test_lbl = lv_label_create(test_btn);
-    lv_obj_set_style_text_font(test_lbl, isLargeScreen ? &lv_font_montserrat_20 : &lv_font_montserrat_14, LV_PART_MAIN);
-    lv_obj_set_style_text_color(test_lbl, lv_color_hex(0x11111b), LV_PART_MAIN);
-    lv_obj_center(test_lbl);
-    lv_obj_add_event_cb(test_btn, test_cb, LV_EVENT_CLICKED, nullptr);
-    test_update_label();
+    // One full-width card: the volume with its slider above, the test button below
+    lv_obj_t* card = lv_obj_create(parent);
+    lv_obj_set_size(card, lv_pct(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(card, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_bg_opa(card, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(card, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(card, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_row(card, isLargeScreen ? 10 : 6, LV_PART_MAIN);
+    lv_obj_clear_flag(card, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
-    lv_obj_t* box = lv_obj_create(parent);
-    lv_obj_set_size(box, lv_pct(100), isLargeScreen ? 52 : 38);
-    lv_obj_set_flex_flow(box, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(box, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_bg_opa(box, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_set_style_border_width(box, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(box, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_row(box, 4, LV_PART_MAIN);
-    lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-
-    vol_lbl = lv_label_create(box);
-    lv_obj_set_style_text_font(vol_lbl, isLargeScreen ? &lv_font_montserrat_20 : &lv_font_montserrat_14, LV_PART_MAIN);
-    lv_obj_set_style_text_color(vol_lbl, lv_color_hex(0xcdd6f4), LV_PART_MAIN);
+    lv_obj_t* head = lv_obj_create(card);   // "Alarm volume" on the left, the percentage on the right
+    lv_obj_set_size(head, lv_pct(96), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(head, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(head, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_bg_opa(head, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(head, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(head, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(head, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_t* title = lv_label_create(head);
+    lv_label_set_text(title, "Alarm volume");
+    lv_obj_set_style_text_font(title, f, LV_PART_MAIN);
+    lv_obj_set_style_text_color(title, lv_color_hex(0xcdd6f4), LV_PART_MAIN);
+    vol_lbl = lv_label_create(head);
+    lv_obj_set_style_text_font(vol_lbl, f, LV_PART_MAIN);
+    lv_obj_set_style_text_color(vol_lbl, lv_color_hex(0xcba6f7), LV_PART_MAIN);
     vol_text();
 
-    lv_obj_t* sl = lv_slider_create(box);
+    lv_obj_t* sl = lv_slider_create(card);
     lv_obj_set_size(sl, lv_pct(92), isLargeScreen ? 16 : 12);
     lv_slider_set_range(sl, 0, 100);
     lv_slider_set_value(sl, alarmClock.cfg().volume, LV_ANIM_OFF);
@@ -487,17 +470,16 @@ void createAlarmTestControls(lv_obj_t* parent, bool isLargeScreen) {
     lv_obj_set_ext_click_area(sl, 12);
     lv_obj_add_event_cb(sl, vol_cb, LV_EVENT_ALL, nullptr);
 
-    lv_obj_t* sb = lv_btn_create(parent);
-    lv_obj_set_size(sb, lv_pct(100), isLargeScreen ? 44 : 34);
-    lv_obj_set_style_radius(sb, 8, LV_PART_MAIN);
-    lv_obj_set_style_shadow_width(sb, 0, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(sb, lv_color_hex(0x89b4fa), LV_PART_MAIN);
-    snd_lbl = lv_label_create(sb);
-    lv_obj_set_style_text_font(snd_lbl, isLargeScreen ? &lv_font_montserrat_20 : &lv_font_montserrat_14, LV_PART_MAIN);
-    lv_obj_set_style_text_color(snd_lbl, lv_color_hex(0x11111b), LV_PART_MAIN);
-    lv_obj_center(snd_lbl);
-    lv_obj_add_event_cb(sb, snd_cb, LV_EVENT_CLICKED, nullptr);
-    snd_update();
+    test_btn = lv_btn_create(card);
+    lv_obj_set_size(test_btn, lv_pct(100), isLargeScreen ? 52 : 38);
+    lv_obj_set_style_radius(test_btn, 8, LV_PART_MAIN);
+    lv_obj_set_style_shadow_width(test_btn, 0, LV_PART_MAIN);
+    test_lbl = lv_label_create(test_btn);
+    lv_obj_set_style_text_font(test_lbl, f, LV_PART_MAIN);
+    lv_obj_set_style_text_color(test_lbl, lv_color_hex(0x11111b), LV_PART_MAIN);
+    lv_obj_center(test_lbl);
+    lv_obj_add_event_cb(test_btn, test_cb, LV_EVENT_CLICKED, nullptr);
+    test_update_label();
 
     test_timer = lv_timer_create(test_timer_cb, 500, nullptr);
 }

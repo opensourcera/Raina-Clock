@@ -77,6 +77,7 @@ WifiManager::WifiManager(const char* ssid, const char* password)
 void WifiManager::begin() {
     Serial.println("[WiFi] Starting Wi-Fi Manager...");
 #ifndef NATIVE_TEST
+    if (!_webTask) xTaskCreatePinnedToCore([](void* self) { ((WifiManager*)self)->webLoop(); }, "web", 12288, this, 1, &_webTask, 0);
     WiFi.setAutoReconnect(true);
     WiFi.setTxPower(WIFI_POWER_11dBm);
 
@@ -151,7 +152,7 @@ void WifiManager::update() {
                 Serial.print("[WiFi] Connected! IP address: ");
                 Serial.println(WiFi.localIP());
 #ifndef NATIVE_TEST
-                startWebServer();
+                _webWant = 1;
 #endif
             } else if (status == WL_CONNECT_FAILED || status == WL_NO_SSID_AVAIL || (millis() - _connectionStartTime > _connectionTimeout)) {
                 Serial.println("[WiFi] Connection failed or timed out. Transitioning to AP Mode...");
@@ -165,13 +166,7 @@ void WifiManager::update() {
                 _lastReconnectAttempt = millis();
                 Serial.println("[WiFi] Connection lost.");
 #ifndef NATIVE_TEST
-                stopWebServer();
-#endif
-            } else {
-#ifndef NATIVE_TEST
-                if (_webServer) {
-                    _webServer->handleClient();
-                }
+                _webWant = 0;
 #endif
             }
             break;
@@ -189,28 +184,13 @@ void WifiManager::update() {
             if (WiFi.status() == WL_CONNECTED) {
                 Serial.println("[WiFi] Wi-Fi connected in background. Stopping AP Mode...");
 #ifndef NATIVE_TEST
-                if (_dnsServer) {
-                    _dnsServer->stop();
-                    delete _dnsServer;
-                    _dnsServer = nullptr;
-                }
-                if (_webServer) {
-                    _webServer->stop();
-                    delete _webServer;
-                    _webServer = nullptr;
-                }
                 WiFi.softAPdisconnect(true);
                 WiFi.mode(WIFI_STA);
-                startWebServer();
+                _webWant = 1;
 #endif
                 _state = WIFI_STATE_CONNECTED;
                 Serial.print("[WiFi] Connected! IP address: ");
                 Serial.println(WiFi.localIP());
-            } else {
-#ifndef NATIVE_TEST
-                if (_dnsServer) _dnsServer->processNextRequest();
-                if (_webServer) _webServer->handleClient();
-#endif
             }
             break;
     }
@@ -266,6 +246,67 @@ String WifiManager::getAPSSID() {
     return "cyd-alarm-clock-" + suffix;
 }
 
+#ifndef NATIVE_TEST
+void WifiManager::buildApServer() {
+    IPAddress apIP(192, 168, 4, 1);
+    _dnsServer = new DNSServer();
+    _dnsServer->setErrorReplyCode(DNSReplyCode::NoError);
+    _dnsServer->start(53, "*", apIP);
+
+    _webServer = new LockedWebServer(80);
+    if (MDNS.begin(settings.getHostname().c_str())) {
+        MDNS.addService("http", "tcp", 80);
+        Serial.printf("[mDNS] Responder started: http://%s.local\n", settings.getHostname().c_str());
+    } else {
+        Serial.println("[mDNS] Error setting up MDNS responder!");
+    }
+    _webServer->on("/", [this]() { handleRoot(); });
+    _webServer->on("/save", [this]() { handleSave(); });
+    _webServer->on("/scan", [this]() {
+        WiFi.scanNetworks(true, false, false, 150);
+        String html = "<!DOCTYPE html><html><head>";
+        html += "<meta http-equiv='refresh' content='3;url=/'>";
+        html += "<meta name='viewport' content='width=device-width, initial-scale=1'>";
+        html += "<title>Scanning...</title>";
+        html += "<style>";
+        html += "body { font-family: 'Inter', system-ui, sans-serif; background: #1e1e2e; color: #cdd6f4; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }";
+        html += ".card { background: #181825; border-radius: 12px; padding: 30px; width: 100%; max-width: 400px; box-shadow: 0 8px 30px rgba(0,0,0,0.3); border: 1px solid #313244; text-align: center; }";
+        html += "h2 { color: #f5c2e7; margin-top: 0; }";
+        html += "p { color: #a6adc8; }";
+        html += "</style></head><body>";
+        html += "<div class='card'><h2>Scanning for Wi-Fi...</h2><p>Please wait while we refresh the network list.</p></div>";
+        html += "</body></html>";
+        _webServer->send(200, "text/html", html);
+    });
+    _webServer->onNotFound([this]() { handleNotFound(); });
+    registerOTARoutes();
+    _webServer->begin();
+    Serial.println("[WiFi] AP Mode Web Server and DNS Server started.");
+}
+
+void WifiManager::teardownServers() {
+    if (_dnsServer) { _dnsServer->stop(); delete _dnsServer; _dnsServer = nullptr; }
+    stopWebServer();
+}
+
+// The web task owns the servers: it builds them, serves clients and tears them down. A client that connects and says
+// nothing makes handleClient() wait for seconds; that now stalls only this task.
+void WifiManager::webLoop() {
+    for (;;) {
+        int want = _webWant;
+        if (want != _webHave) {
+            teardownServers();
+            if (want == 1) startWebServer();
+            else if (want == 2) buildApServer();
+            _webHave = want;
+        }
+        if (_dnsServer) _dnsServer->processNextRequest();
+        if (_webServer) _webServer->handleClient();
+        vTaskDelay(pdMS_TO_TICKS(2));
+    }
+}
+#endif
+
 void WifiManager::startAPMode() {
     _state = WIFI_STATE_AP_MODE;
     _lastReconnectAttempt = millis();
@@ -298,38 +339,7 @@ void WifiManager::startAPMode() {
     // Wait for the captive portal to trigger the scan
     _cachedNetworksHTML = "<div class='net-item' style='color: #a6adc8;'>Scanning in progress... Please refresh.</div>";
 
-    _dnsServer = new DNSServer();
-    _dnsServer->setErrorReplyCode(DNSReplyCode::NoError);
-    _dnsServer->start(53, "*", apIP);
-
-    _webServer = new WebServer(80);
-    if (MDNS.begin(settings.getHostname().c_str())) {
-        MDNS.addService("http", "tcp", 80);
-        Serial.printf("[mDNS] Responder started: http://%s.local\n", settings.getHostname().c_str());
-    } else {
-        Serial.println("[mDNS] Error setting up MDNS responder!");
-    }
-    _webServer->on("/", [this]() { handleRoot(); });
-    _webServer->on("/save", [this]() { handleSave(); });
-    _webServer->on("/scan", [this]() {
-        WiFi.scanNetworks(true, false, false, 150);
-        String html = "<!DOCTYPE html><html><head>";
-        html += "<meta http-equiv='refresh' content='3;url=/'>";
-        html += "<meta name='viewport' content='width=device-width, initial-scale=1'>";
-        html += "<title>Scanning...</title>";
-        html += "<style>";
-        html += "body { font-family: 'Inter', system-ui, sans-serif; background: #1e1e2e; color: #cdd6f4; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }";
-        html += ".card { background: #181825; border-radius: 12px; padding: 30px; width: 100%; max-width: 400px; box-shadow: 0 8px 30px rgba(0,0,0,0.3); border: 1px solid #313244; text-align: center; }";
-        html += "h2 { color: #f5c2e7; margin-top: 0; }";
-        html += "p { color: #a6adc8; }";
-        html += "</style></head><body>";
-        html += "<div class='card'><h2>Scanning for Wi-Fi...</h2><p>Please wait while we refresh the network list.</p></div>";
-        html += "</body></html>";
-        _webServer->send(200, "text/html", html);
-    });
-    _webServer->onNotFound([this]() { handleNotFound(); });
-    registerOTARoutes();
-    _webServer->begin();
+    _webWant = 2;   // the web task builds the portal
 
     Serial.println("[WiFi] AP Mode Web Server and DNS Server started.");
 #endif
@@ -546,7 +556,7 @@ void WifiManager::startWebServer() {
     if (_webServer) {
         stopWebServer();
     }
-    _webServer = new WebServer(80);
+    _webServer = new LockedWebServer(80);
     if (MDNS.begin(settings.getHostname().c_str())) {
         MDNS.addService("http", "tcp", 80);
         Serial.printf("[mDNS] Responder started: http://%s.local\n", settings.getHostname().c_str());
@@ -665,14 +675,12 @@ void WifiManager::startWebServer() {
         _webServer->send(200, "application/json", alarmClock.toJson(have ? &now : nullptr, settings.getUse24HourFormat()));
     });
     _webServer->on("/api/alarm/test", HTTP_POST, [this]() {
-        String song = alarmClock.cfg().song; int vol = alarmClock.cfg().volume;
-        if (_webServer->hasArg("plain")) { DynamicJsonDocument d(256); if (!deserializeJson(d, _webServer->arg("plain"))) { if (d.containsKey("song")) song = String(d["song"].as<const char*>()); if (d.containsKey("volume")) vol = d["volume"].as<int>(); } }
+        int vol = alarmClock.cfg().volume;
+        if (_webServer->hasArg("plain")) { DynamicJsonDocument d(256); if (!deserializeJson(d, _webServer->arg("plain")) && d.containsKey("volume")) vol = d["volume"].as<int>(); }
         audio.setVolume(vol);
-        eventLog("web: test sound %s", song.c_str());
-        bool beep = song == "beep";
-        bool file = !beep && audio.playFile(String(AudioPlayer::musicDir()) + "/" + song, false);
-        if (!file) audio.playBeep(false);   // the beep needs no card and no decoder
-        _webServer->send(200, "text/plain", file ? "Playing " + song : (beep ? String("Playing the beep") : String("File not on the card: playing the beep")));
+        eventLog("web: test beep at volume %d", vol);
+        audio.playBeep(false);
+        _webServer->send(200, "text/plain", "Beeping");
     });
     _webServer->on("/api/alarm/stop", HTTP_POST, [this]() {
         if (alarmClock.isRinging()) alarmRingingStopNow(); else audio.stop();   // dismiss a ringing alarm, or just end a test sound
@@ -683,10 +691,6 @@ void WifiManager::startWebServer() {
         alarmRingingSnoozeNow();
         _webServer->send(200, "text/plain", "Snoozed");
     });
-    _webServer->on("/api/music", HTTP_GET, [this]() { _webServer->send(200, "application/json", AudioPlayer::musicList()); });
-    _webServer->on("/api/music/upload", HTTP_POST, [this]() {
-        _webServer->send(_uploadFile ? 500 : 200, "text/plain", _uploadFile ? "Upload did not finish" : "OK");
-    }, [this]() { handleMusicUpload(); });
     _webServer->on("/api/todo", HTTP_GET, [this]() {
         _webServer->send(200, "application/json", todo.toJson());
     });
@@ -1156,24 +1160,6 @@ void WifiManager::handleSettingsSave() {
 void WifiManager::handleAlarm() {
     String html = alarm_html;
     _webServer->send(200, "text/html", html);
-}
-
-void WifiManager::handleMusicUpload() {
-    HTTPUpload& up = _webServer->upload();
-    if (up.status == UPLOAD_FILE_START) {
-        if (!SdCardManager::isMounted()) SdCardManager::begin();
-        if (!SdCardManager::isMounted()) { Serial.println("[music] upload refused: no SD card"); return; }
-        String name = up.filename; int slash = name.lastIndexOf('/'); if (slash >= 0) name = name.substring(slash + 1);
-        if (!SD.exists(AudioPlayer::musicDir())) SD.mkdir(AudioPlayer::musicDir());
-        audio.stop();
-        _uploadFile = SD.open(String(AudioPlayer::musicDir()) + "/" + name, FILE_WRITE);
-        Serial.printf("[music] upload %s -> %s\n", name.c_str(), _uploadFile ? "open" : "FAILED");
-    } else if (up.status == UPLOAD_FILE_WRITE) {
-        if (_uploadFile) _uploadFile.write(up.buf, up.currentSize);
-    } else if (up.status == UPLOAD_FILE_END || up.status == UPLOAD_FILE_ABORTED) {
-        if (_uploadFile) { _uploadFile.close(); _uploadFile = fs::File(); }
-        Serial.printf("[music] upload %s, %u bytes\n", up.status == UPLOAD_FILE_END ? "done" : "aborted", (unsigned)up.totalSize);
-    }
 }
 
 void WifiManager::handleTodo() {

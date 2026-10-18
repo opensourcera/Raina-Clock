@@ -4,6 +4,11 @@
 #include "ui_wifi.h"
 #include "audio_player.h"
 #include "event_log.h"
+#include "ui_lock.h"
+#include "touch_manager.h"
+#include <soc/gpio_struct.h>
+#include <soc/rtc_io_reg.h>
+#include <soc/io_mux_reg.h>
 #include "config_backup.h"
 #include <esp_task_wdt.h>
 #include "ui_alarm.h"
@@ -306,18 +311,22 @@ static void watcherTask(void*) {
 }
 
 static void serialCommands() {
-    // Bench tests over USB: p = play the alarm song, b = beep, s = stop, l = print the log, h = heap
+    static bool touchDebug = false; static bool lastT = false;
+    if (touchDebug) { int x = 0, y = 0; bool t = TouchManager::getTouchPoint(x, y); if (t != lastT || (t && millis() % 200 < 5)) { Serial.printf("touch %d raw %d,%d\n", t, x, y); } lastT = t; }
+    // Bench tests over USB: p and b = beep, s = stop, l = print the log, h = heap
     while (Serial.available()) {
         int c = Serial.read();
         if (c == 'p') { eventLog("serial: play"); testPlayAlarmSound(false); }
         else if (c == 'b') { eventLog("serial: beep"); audio.setVolume(alarmClock.cfg().volume); audio.playBeep(false); }
         else if (c == 's') { eventLog("serial: stop"); audio.stop(); }
         else if (c == 'l') { Serial.println("---- log ----"); Serial.print(eventLogRead()); Serial.println("---- end ----"); }
+        else if (c == 't') { touchDebug = !touchDebug; Serial.println(touchDebug ? "touch monitor on" : "touch monitor off"); }
+        else if (c == 'm') { Serial.printf("gpio25 out_sel %u, iomux %08x, rtc dac1 %08x\n", (unsigned)GPIO.func_out_sel_cfg[25].func_sel, (unsigned)READ_PERI_REG(GPIO_PIN_MUX_REG[25]), (unsigned)READ_PERI_REG(RTC_IO_PAD_DAC1_REG)); }
         else if (c == 'h') { Serial.printf("heap %u, lowest %u, largest %u\n", (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMinFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)); }
     }
 }
 
-void loop() {
+static void loopBody() {
     STAGE("loop top");
     {
         static bool wdt_armed = false;   // armed on the first pass, once start-up work is over
@@ -325,6 +334,7 @@ void loop() {
         esp_task_wdt_reset();            // the watchdog restarts the clock if this loop ever stops for a minute
     }
     eventLogHeartbeat();
+    if (audio.takeTouchFix()) TouchManager::reattach();   // the speaker DAC had GPIO 25, the touch clock
     serialCommands();
     if (pending_ui_sync) {
         pending_ui_sync = false;
@@ -917,4 +927,9 @@ void loop() {
         mqtt.publish("settings/local_sensor_temp_offset", String(settings.getLocalSensorTempOffset(), 1).c_str(), true);
         mqtt.publish("settings/local_sensor_hum_offset", String(settings.getLocalSensorHumOffset(), 1).c_str(), true);
     }
+}
+
+void loop() {
+    { UiLock g; loopBody(); }
+    delay(3);   // the lock is free here: the web task runs its page handlers in this gap
 }

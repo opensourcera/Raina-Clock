@@ -6,6 +6,7 @@ static int mockX = 0;
 static int mockY = 0;
 
 void TouchManager::begin() {}
+void TouchManager::reattach() {}
 bool TouchManager::isTouched() { return mockTouched; }
 bool TouchManager::getTouchPoint(int& x, int& y) {
     x = mockX;
@@ -55,6 +56,10 @@ void TouchManager::begin() {
     touchSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
     touch.begin(touchSPI);
     touch.setRotation(1); // landscape
+}
+
+void TouchManager::reattach() {
+    touchSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
 }
 
 bool TouchManager::isTouched() {
@@ -177,6 +182,8 @@ static void updateTouchSample() {
         }
     }
 }
+
+void TouchManager::reattach() {}
 
 void TouchManager::begin() {
     Wire.begin(I2C_SDA, I2C_SCL);

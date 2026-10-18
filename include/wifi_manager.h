@@ -9,6 +9,19 @@
 #include <WebServer.h>
 #include <FS.h>
 #include <ImprovWiFiLibrary.h>
+#include "ui_lock.h"
+
+// A WebServer whose page handlers run under the UI lock (see ui_lock.h)
+class LockedWebServer : public WebServer {
+public:
+    using WebServer::WebServer;
+    void on(const Uri& u, THandlerFunction fn) { WebServer::on(u, wrap(fn)); }
+    void on(const Uri& u, HTTPMethod m, THandlerFunction fn) { WebServer::on(u, m, wrap(fn)); }
+    void on(const Uri& u, HTTPMethod m, THandlerFunction fn, THandlerFunction ufn) { WebServer::on(u, m, wrap(fn), wrap(ufn)); }
+    void onNotFound(THandlerFunction fn) { WebServer::onNotFound(wrap(fn)); }
+private:
+    static THandlerFunction wrap(THandlerFunction fn) { return [fn]() { UiLock g; fn(); }; }
+};
 #endif
 
 enum WifiState {
@@ -52,9 +65,16 @@ private:
 
 #ifndef NATIVE_TEST
     DNSServer* _dnsServer = nullptr;
-    WebServer* _webServer = nullptr;
+    LockedWebServer* _webServer = nullptr;
+    volatile int _webWant = 0;   // what the web task should run: 0 nothing, 1 settings server (STA), 2 portal (AP)
+    int _webHave = 0;
+    TaskHandle_t _webTask = nullptr;
+    void buildApServer();
+    void teardownServers();
+public:
+    void webLoop();              // the web task body
+private:
     ImprovWiFi* _improv = nullptr;
-    fs::File _uploadFile;   // fs:: because TFT_eSPI turns the FS globals off
     void startWebServer();
     void stopWebServer();
     void handleScreenshot();
@@ -62,7 +82,6 @@ private:
     void handleSettingsSave();
     void handleTodo();
     void handleAlarm();
-    void handleMusicUpload();
     void registerOTARoutes();
 #endif
 };

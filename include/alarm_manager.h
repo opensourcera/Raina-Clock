@@ -14,7 +14,6 @@ struct AlarmConfig {
     bool repeat = true;        // daily; false: one shot, switched off after it rings
     int snoozeMinutes = 9;
     int volume = 80;           // 0-100
-    String song = "fur_elise.mp3";   // file in /music on the SD card; the built-in tune plays when it is missing
 };
 
 class AlarmManager {
@@ -27,7 +26,6 @@ public:
     void setEnabled(bool on);
     void setSnoozeMinutes(int m);
     void setVolume(int pct);
-    void setSong(const String& file);
 
     bool isDue(const struct tm& now);                       // true once when it should start ringing
     void snooze(const struct tm& now);

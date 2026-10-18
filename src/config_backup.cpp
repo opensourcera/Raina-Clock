@@ -27,7 +27,7 @@ void configBackupSave() {
     const AlarmConfig& a = alarmClock.cfg();
     JsonObject al = doc.createNestedObject("alarm");
     al["enabled"] = a.enabled; al["hour"] = a.hour; al["minute"] = a.minute; al["repeat"] = a.repeat;
-    al["snooze_minutes"] = a.snoozeMinutes; al["volume"] = a.volume; al["song"] = a.song;
+    al["snooze_minutes"] = a.snoozeMinutes; al["volume"] = a.volume;
     std::string out;
     serializeJson(doc, out);
     if (!fsWriteFile(CONFIG_FILE, String(out.c_str()))) eventLog("config backup: could not write %s", CONFIG_FILE);

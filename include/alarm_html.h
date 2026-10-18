@@ -55,8 +55,6 @@ button.danger { background: #f38ba8; }
 <div class='check'><input type='checkbox' id='enabled'><label for='enabled'>Alarm on</label></div>
 
 <div class='section'>Sound</div>
-<label for='song'>Song (MP3 files in /music on the SD card)</label>
-<select id='song'></select>
 <label for='volume'>Volume <span id='volv'></span></label>
 <input type='range' id='volume' min='0' max='100'>
 <label for='snooze'>Snooze minutes</label>
@@ -67,9 +65,6 @@ button.danger { background: #f38ba8; }
 </div>
 <button onclick='save()'>Save</button>
 
-<div class='section'>Add music to the SD card</div>
-<input type='file' id='file' accept='.mp3,audio/mpeg' style='margin-bottom: 10px; color: #a6adc8;'>
-<button class='quiet' onclick='upload()'>Upload MP3</button>
 <p id='status'></p>
 
 <a class='btn-back' href='/'>&larr; Back</a>
@@ -82,10 +77,6 @@ async function load() {
   $('time').value = String(a.hour).padStart(2, '0') + ':' + String(a.minute).padStart(2, '0');
   $('repeat').checked = a.repeat; $('enabled').checked = a.enabled;
   $('volume').value = a.volume; $('volv').textContent = a.volume + '%'; $('snooze').value = a.snooze_minutes;
-  const songs = await (await fetch('/api/music')).json();
-  const sel = $('song'); sel.innerHTML = '';
-  if (!songs.length) { const o = document.createElement('option'); o.value = a.song; o.textContent = a.song + ' (not on the card: built-in tune plays)'; sel.appendChild(o); }
-  for (const s of songs) { const o = document.createElement('option'); o.value = s; o.textContent = s; if (s === a.song) o.selected = true; sel.appendChild(o); }
 }
 $('volume').oninput = e => $('volv').textContent = e.target.value + '%';
 async function post(body) {
@@ -96,18 +87,10 @@ async function post(body) {
 function inHours(h) { post({in_hours: h}); }
 function save() {
   const [h, m] = $('time').value.split(':').map(Number);
-  post({hour: h, minute: m, repeat: $('repeat').checked, enabled: $('enabled').checked, song: $('song').value, volume: Number($('volume').value), snooze_minutes: Number($('snooze').value)});
+  post({hour: h, minute: m, repeat: $('repeat').checked, enabled: $('enabled').checked, volume: Number($('volume').value), snooze_minutes: Number($('snooze').value)});
 }
-async function test() { await fetch('/api/alarm/test', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({song: $('song').value, volume: Number($('volume').value)})}); $('status').textContent = 'Playing on the clock.'; }
+async function test() { await fetch('/api/alarm/test', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({volume: Number($('volume').value)})}); $('status').textContent = 'Beeping on the clock.'; }
 async function stopSound() { await fetch('/api/alarm/stop', {method: 'POST'}); $('status').textContent = 'Stopped.'; }
-async function upload() {
-  const f = $('file').files[0]; if (!f) { alert('Choose an MP3 file first.'); return; }
-  const fd = new FormData(); fd.append('file', f, f.name);
-  $('status').textContent = 'Uploading ' + f.name + ' (' + Math.round(f.size / 1024) + ' KB)...';
-  const r = await fetch('/api/music/upload', {method: 'POST', body: fd});
-  $('status').textContent = r.ok ? 'Uploaded ' + f.name : 'Upload failed: ' + await r.text();
-  await load();
-}
 load();
 </script>
 </body>

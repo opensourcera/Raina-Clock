@@ -1103,7 +1103,7 @@ void initUI() {
                 if (set_cur_page < 0) { lv_obj_set_parent(ch, set_junk); continue; }
                 lv_obj_set_parent(ch, set_pg[set_cur_page]);
                 bool plain = lv_obj_check_type(ch, &lv_slider_class) || lv_obj_check_type(ch, &lv_label_class);
-                bool full = set_cur_page == 4 || set_cur_page == 6 || (set_cur_page == 3 && plain);
+                bool full = set_cur_page == 4 || set_cur_page == 6 || (set_cur_page == 3 && plain) || (set_cur_page == 0 && !lv_obj_check_type(ch, &lv_btn_class));
                 lv_obj_set_width(ch, lv_pct(full ? 100 : 48));   // two switches per row, sliders and their labels full width
             }
         }

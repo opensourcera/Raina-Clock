@@ -4,6 +4,7 @@
 class TouchManager {
 public:
     static void begin();
+    static void reattach();   // take the touch panel's SPI pins back (the speaker DAC borrows GPIO 25, its clock)
     static bool isTouched();
     static bool getTouchPoint(int& x, int& y);
     static bool isCapacitive();
