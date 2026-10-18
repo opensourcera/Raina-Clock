@@ -117,11 +117,10 @@ static void dialog_off_cb(lv_event_t* e) {
 
 static void dialog_rebuild_async(void* arg) { (void)arg; dialogClose(); dialogBuild(); }
 
-// The mode toggle: the down arrow is a count down, the clock a time of day
+// The Count down button: lit when on (hours and minutes from now), dim when off (a time of day)
 static void mode_cb(lv_event_t* e) {
-    bool cd = (intptr_t)lv_event_get_user_data(e) != 0;
-    if (cd == dlg_countdown) return;
-    dlg_countdown = cd;
+    (void)e;
+    dlg_countdown = !dlg_countdown;
     lv_async_call(dialog_rebuild_async, nullptr);       // rebuild outside the button's own callback
 }
 
@@ -133,7 +132,7 @@ static lv_obj_t* name_ta = nullptr;
 static void nameButtonText() {
     if (name_lbl == nullptr) return;
     if (dlg_name.length()) lv_label_set_text(name_lbl, dlg_name.c_str());
-    else lv_label_set_text(name_lbl, "Name");
+    else lv_label_set_text(name_lbl, LV_SYMBOL_EDIT "  Name");
 }
 
 static void nameWindowClose() {
@@ -235,27 +234,11 @@ static void nameWindowOpen() {
     }, LV_EVENT_VALUE_CHANGED, nullptr);
 }
 
-static void name_cb(lv_event_t* e) { (void)e; nameWindowOpen(); }
-
-// A small clock face for the toggle (the symbol font has none)
-static void clockFace(lv_obj_t* parent, int d, uint32_t color) {
-    lv_obj_t* c = lv_obj_create(parent);
-    lv_obj_set_size(c, d, d);
-    lv_obj_set_style_radius(c, LV_RADIUS_CIRCLE, LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(c, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_set_style_border_width(c, 2, LV_PART_MAIN);
-    lv_obj_set_style_border_color(c, lv_color_hex(color), LV_PART_MAIN);
-    lv_obj_set_style_pad_all(c, 0, LV_PART_MAIN);
-    lv_obj_clear_flag(c, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_center(c);
-    static lv_point_t hands[3];                         // the points must outlive the line; every face is the same size
-    int m = d / 2 - 2;                                  // the centre, inside the border
-    hands[0].x = m; hands[0].y = 3; hands[1].x = m; hands[1].y = m; hands[2].x = m + d / 4; hands[2].y = m;
-    lv_obj_t* l = lv_line_create(c);
-    lv_line_set_points(l, hands, 3);
-    lv_obj_set_style_line_width(l, 2, LV_PART_MAIN);
-    lv_obj_set_style_line_rounded(l, true, LV_PART_MAIN);
-    lv_obj_set_style_line_color(l, lv_color_hex(color), LV_PART_MAIN);
+static void name_cb(lv_event_t* e) {
+    lv_point_t p; lv_indev_t* in = lv_indev_get_act();
+    if (in) lv_indev_get_point(in, &p); else p.x = p.y = -1;
+    eventLog("alarm: name window opened by a tap at %d,%d", p.x, p.y);
+    nameWindowOpen();
 }
 
 static int maxHour() { return (ed_12h && !dlg_countdown) ? 12 : 23; }
@@ -442,31 +425,22 @@ static void dialogBuild() {
         btn_pm = plainBtn(set_dialog, "PM", pm_cb, 0x313244, g + fieldW + 14, ry, fieldW, rowH, fm);
     }
 
-    // The mode toggle (down arrow: count down | clock: time of day), then the Info button that names the alarm
-    int ty = ry + rowH + g, tH = alarm_large ? 40 : 32, segW = alarm_large ? 52 : 40;
-    for (int i = 0; i < 2; i++) {
-        bool cd = i == 0, on = cd == dlg_countdown;
-        uint32_t fg = on ? 0x11111b : 0xa6adc8;
-        lv_obj_t* b = lv_btn_create(set_dialog);
-        lv_obj_set_pos(b, g + i * segW, ty);
-        lv_obj_set_size(b, segW, tH);
-        lv_obj_set_style_bg_color(b, lv_color_hex(on ? 0xcba6f7 : 0x313244), LV_PART_MAIN);
-        lv_obj_set_style_radius(b, 8, LV_PART_MAIN);
-        lv_obj_set_style_shadow_width(b, 0, LV_PART_MAIN);
-        lv_obj_set_style_pad_all(b, 0, LV_PART_MAIN);
-        lv_obj_set_ext_click_area(b, 4);
-        if (cd) {
-            lv_obj_t* l = lv_label_create(b);
-            lv_label_set_text(l, LV_SYMBOL_DOWN);
-            lv_obj_set_style_text_font(l, fm, LV_PART_MAIN);
-            lv_obj_set_style_text_color(l, lv_color_hex(fg), LV_PART_MAIN);
-            lv_obj_center(l);
-        } else {
-            clockFace(b, tH - 12, fg);
-        }
-        lv_obj_add_event_cb(b, mode_cb, LV_EVENT_CLICKED, (void*)(intptr_t)(cd ? 1 : 0));
-    }
-    int nx = g + 2 * segW + g;
+    // Count down on/off (the down arrow, lit when on), then the Info button that names the alarm
+    int ty = ry + rowH + g, tH = alarm_large ? 40 : 32, cdW = alarm_large ? 60 : 46;   // an icon: the down arrow counts down
+    lv_obj_t* cdb = lv_btn_create(set_dialog);
+    lv_obj_set_pos(cdb, g, ty);
+    lv_obj_set_size(cdb, cdW, tH);
+    lv_obj_set_style_bg_color(cdb, lv_color_hex(dlg_countdown ? 0xcba6f7 : 0x313244), LV_PART_MAIN);
+    lv_obj_set_style_radius(cdb, 8, LV_PART_MAIN);
+    lv_obj_set_style_shadow_width(cdb, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(cdb, 0, LV_PART_MAIN);
+    lv_obj_add_event_cb(cdb, mode_cb, LV_EVENT_CLICKED, nullptr);
+    lv_obj_t* cdl = lv_label_create(cdb);
+    lv_label_set_text(cdl, LV_SYMBOL_DOWN);
+    lv_obj_set_style_text_font(cdl, fm, LV_PART_MAIN);
+    lv_obj_set_style_text_color(cdl, lv_color_hex(dlg_countdown ? 0x11111b : 0xa6adc8), LV_PART_MAIN);
+    lv_obj_center(cdl);
+    int nx = g + cdW + g;
     lv_obj_t* nb = lv_btn_create(set_dialog);
     lv_obj_set_pos(nb, nx, ty);
     lv_obj_set_size(nb, colW + g - nx, tH);
