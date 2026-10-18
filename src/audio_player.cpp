@@ -76,7 +76,8 @@ bool AudioPlayer::startCurrent() {
     _touchFix = true;
     ampOn();
     _running = true;
-    eventLog("audio: beep at volume %d%s (heap %u)", _volume, _curLoop ? ", looping" : "", (unsigned)ESP.getFreeHeap());
+    if (!_repeatRound) eventLog("audio: beep at volume %d%s (heap %u)", _volume, _curLoop ? ", looping" : "", (unsigned)ESP.getFreeHeap());
+    _repeatRound = false;
     return true;
 }
 
@@ -95,7 +96,7 @@ void AudioPlayer::teardown() {
 void AudioPlayer::pump() {
     if (xSemaphoreTakeRecursive(_mx, 0) != pdTRUE) return;   // someone is starting or stopping: try again in a moment
     if (!_running) {
-        if (restartAt != 0 && (int32_t)(millis() - restartAt) >= 0) { restartAt = 0; startCurrent(); }
+        if (restartAt != 0 && (int32_t)(millis() - restartAt) >= 0) { restartAt = 0; _repeatRound = true; startCurrent(); }
     } else if (_gen) {
         if (!((AudioGeneratorRTTTL*)_gen)->loop()) {
             teardown();

@@ -4,6 +4,7 @@
 #include "alarm_manager.h"
 #include <ArduinoJson.h>
 #include <string>
+#include <SPIFFS.h>
 
 extern SettingsManager settings;
 
@@ -37,6 +38,9 @@ String configBackupStatus() {   // for the web page: what the copy holds, withou
     DynamicJsonDocument doc(1024), out(512);
     String text = fsReadFile(CONFIG_FILE);
     out["file_bytes"] = text.length();
+    out["fs_total"] = SPIFFS.totalBytes(); out["fs_used"] = SPIFFS.usedBytes();
+    { File f = SPIFFS.open("/log.txt", "r"); out["log_bytes"] = f ? (int)f.size() : -1; if (f) f.close(); }
+    { File f = SPIFFS.open("/log.old", "r"); out["log_old_bytes"] = f ? (int)f.size() : -1; if (f) f.close(); }
     if (text.length() && !deserializeJson(doc, text.c_str())) {
         out["wifi_ssid"] = doc["wifi_ssid"].as<String>();
         out["wifi_password_length"] = String(doc["wifi_password"] | "").length();

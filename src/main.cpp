@@ -321,6 +321,7 @@ static void serialCommands() {
         else if (c == 's') { eventLog("serial: stop"); audio.stop(); }
         else if (c == 'l') { Serial.println("---- log ----"); Serial.print(eventLogRead()); Serial.println("---- end ----"); }
         else if (c == 't') { touchDebug = !touchDebug; Serial.println(touchDebug ? "touch monitor on" : "touch monitor off"); }
+        else if (c == 'r') { eventLog("serial: ring"); startAlarmRinging(); }
         else if (c == 'm') { Serial.printf("gpio25 out_sel %u, iomux %08x, rtc dac1 %08x\n", (unsigned)GPIO.func_out_sel_cfg[25].func_sel, (unsigned)READ_PERI_REG(GPIO_PIN_MUX_REG[25]), (unsigned)READ_PERI_REG(RTC_IO_PAD_DAC1_REG)); }
         else if (c == 'h') { Serial.printf("heap %u, lowest %u, largest %u\n", (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMinFreeHeap(), (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)); }
     }

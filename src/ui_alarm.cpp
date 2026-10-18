@@ -17,9 +17,6 @@ static lv_obj_t* alarm_label = nullptr;
 static lv_obj_t* ring_overlay = nullptr;
 static lv_obj_t* ring_time = nullptr;
 static lv_obj_t* set_dialog = nullptr;
-static lv_obj_t* roll_hour = nullptr;
-static lv_obj_t* roll_min = nullptr;
-static lv_obj_t* roll_ampm = nullptr;
 static bool alarm_large = false;
 
 static bool localNow(struct tm* t) { return getLocalTimeWrapper(t, 0); }
@@ -92,13 +89,28 @@ static void six_cb(lv_event_t* e) { (void)e; inHours(6); }
 static void seven_cb(lv_event_t* e) { (void)e; inHours(7); }
 static void off_cb(lv_event_t* e) { (void)e; alarmClock.setEnabled(false); alarmClock.save(); refreshAlarmUI(); }
 
-// ---- the Set popup: the time of day (every day), or a count down (hours and minutes from now)
+// ---- the Set popup: the time of day (every day), or a count down (hours and minutes from now). The numbers are typed
+// on a big keypad; tap the hour or the minutes to choose which one the keys change.
 
 static bool dlg_countdown = false;      // remembered between openings
 static int dlg_cd_hours = 6, dlg_cd_minutes = 0;
 static void dialogBuild();
 
-static void dialogClose() { if (set_dialog) { lv_obj_del(set_dialog); set_dialog = nullptr; roll_hour = roll_min = roll_ampm = nullptr; } }
+static int ed_h = 7, ed_m = 0;          // what the fields show (12-hour mode: 1..12)
+static bool ed_pm = false, ed_12h = false;
+static int ed_field = 0;                // 0 the hour, 1 the minutes
+static int ed_digits = 0;               // digits typed into the current field so far
+static lv_obj_t* box_h = nullptr;
+static lv_obj_t* box_m = nullptr;
+static lv_obj_t* lbl_h = nullptr;
+static lv_obj_t* lbl_m = nullptr;
+static lv_obj_t* btn_am = nullptr;
+static lv_obj_t* btn_pm = nullptr;
+
+static void dialogClose() {
+    if (set_dialog) { lv_obj_del(set_dialog); set_dialog = nullptr; }
+    box_h = box_m = lbl_h = lbl_m = btn_am = btn_pm = nullptr;
+}
 static void dialog_cancel_cb(lv_event_t* e) { (void)e; dialogClose(); }
 
 static void dialog_rebuild_async(void* arg) { (void)arg; dialogClose(); dialogBuild(); }
@@ -108,76 +120,188 @@ static void dialog_countdown_cb(lv_event_t* e) {
     lv_async_call(dialog_rebuild_async, nullptr);       // rebuild outside the checkbox's own callback
 }
 
+static int maxHour() { return (ed_12h && !dlg_countdown) ? 12 : 23; }
+
+static void fieldsShow() {
+    if (!lbl_h) return;
+    char b[8];
+    snprintf(b, sizeof(b), (ed_12h && !dlg_countdown) ? "%d" : "%02d", ed_h); lv_label_set_text(lbl_h, b);
+    snprintf(b, sizeof(b), "%02d", ed_m); lv_label_set_text(lbl_m, b);
+    lv_obj_t* boxes[2] = {box_h, box_m};
+    for (int i = 0; i < 2; i++) {
+        bool on = i == ed_field;
+        lv_obj_set_style_border_color(boxes[i], lv_color_hex(on ? 0xcba6f7 : 0x45475a), LV_PART_MAIN);
+        lv_obj_set_style_border_width(boxes[i], on ? 3 : 1, LV_PART_MAIN);
+        lv_obj_set_style_text_color(boxes[i], lv_color_hex(on ? 0xcba6f7 : 0xcdd6f4), LV_PART_MAIN);
+    }
+    if (btn_am) {
+        lv_obj_set_style_bg_color(btn_am, lv_color_hex(ed_pm ? 0x313244 : 0xfab387), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(btn_pm, lv_color_hex(ed_pm ? 0xfab387 : 0x313244), LV_PART_MAIN);
+        lv_obj_set_style_text_color(btn_am, lv_color_hex(ed_pm ? 0xa6adc8 : 0x11111b), LV_PART_MAIN);
+        lv_obj_set_style_text_color(btn_pm, lv_color_hex(ed_pm ? 0x11111b : 0xa6adc8), LV_PART_MAIN);
+    }
+}
+
+static void fieldSelect(int f) { ed_field = f; ed_digits = 0; fieldsShow(); }
+static void box_h_cb(lv_event_t* e) { (void)e; fieldSelect(0); }
+static void box_m_cb(lv_event_t* e) { (void)e; fieldSelect(1); }
+static void am_cb(lv_event_t* e) { (void)e; ed_pm = false; fieldsShow(); }
+static void pm_cb(lv_event_t* e) { (void)e; ed_pm = true; fieldsShow(); }
+
+// A digit goes into the chosen field. The hour moves on to the minutes as soon as no second digit could follow.
+static void typeDigit(int d) {
+    if (ed_field == 0) {
+        if (ed_digits == 0) {
+            ed_h = d; ed_digits = 1;
+            if (d * 10 > maxHour()) fieldSelect(1);
+        } else {
+            int v = ed_h * 10 + d;
+            ed_h = v <= maxHour() ? v : d;
+            fieldSelect(1);
+        }
+    } else {
+        if (ed_digits == 0) { ed_m = d; ed_digits = d > 5 ? 0 : 1; }
+        else { ed_m = ed_m * 10 + d; ed_digits = 0; }
+    }
+    fieldsShow();
+}
+
+static void keypad_cb(lv_event_t* e) {
+    lv_obj_t* m = lv_event_get_target(e);
+    uint16_t id = lv_btnmatrix_get_selected_btn(m);
+    if (id == LV_BTNMATRIX_BTN_NONE) return;
+    const char* t = lv_btnmatrix_get_btn_text(m, id);
+    if (t == nullptr) return;
+    if (t[0] >= '0' && t[0] <= '9' && t[1] == 0) { typeDigit(t[0] - '0'); return; }
+    if (strcmp(t, LV_SYMBOL_BACKSPACE) == 0) {
+        if (ed_field == 0) ed_h /= 10; else ed_m /= 10;
+        ed_digits = 0;
+        fieldsShow();
+    } else {
+        fieldSelect(1 - ed_field);                        // the arrow: the other field
+    }
+}
+
 static void dialog_save_cb(lv_event_t* e) {
     (void)e;
-    if (!roll_hour || !roll_min) return;
-    int first = (int)lv_roller_get_selected(roll_hour);
-    int minute = (int)lv_roller_get_selected(roll_min);
     if (dlg_countdown) {
-        dlg_cd_hours = first; dlg_cd_minutes = minute;
-        if (first == 0 && minute == 0) return;           // nothing to count
+        dlg_cd_hours = ed_h; dlg_cd_minutes = ed_m;
+        if (ed_h == 0 && ed_m == 0) return;               // nothing to count
         struct tm now;
         if (!localNow(&now)) return;
-        alarmClock.setInHours(first + minute / 60.0f, now);
+        alarmClock.setInHours(ed_h + ed_m / 60.0f, now);
     } else {
-        int hour = first;
-        if (roll_ampm) {                                 // 12-hour rollers: 1..12 plus AM/PM
-            hour = (first + 1) % 12;
-            if (lv_roller_get_selected(roll_ampm) == 1) hour += 12;
+        int hour = ed_h;
+        if (ed_12h) {
+            if (hour == 0) hour = 12;
+            hour = hour % 12 + (ed_pm ? 12 : 0);
         }
-        alarmClock.setTime(hour, minute, true);
+        alarmClock.setTime(hour, ed_m, true);
     }
     alarmClock.save();
     dialogClose();
     refreshAlarmUI();
 }
 
-static lv_obj_t* roller(lv_obj_t* parent, const char* options, int selected, int width) {
-    lv_obj_t* r = lv_roller_create(parent);
-    lv_roller_set_options(r, options, LV_ROLLER_MODE_INFINITE);
-    lv_roller_set_visible_row_count(r, 3);
-    lv_obj_set_width(r, width);
-    lv_obj_set_style_text_font(r, alarm_large ? &lv_font_montserrat_28 : &lv_font_montserrat_20, LV_PART_MAIN);
-    lv_obj_set_style_text_font(r, alarm_large ? &lv_font_montserrat_28 : &lv_font_montserrat_20, LV_PART_SELECTED);
-    lv_obj_set_style_bg_color(r, lv_color_hex(0x313244), LV_PART_MAIN);
-    lv_obj_set_style_text_color(r, lv_color_hex(0xa6adc8), LV_PART_MAIN);
-    lv_obj_set_style_bg_color(r, lv_color_hex(0xfab387), LV_PART_SELECTED);
-    lv_obj_set_style_text_color(r, lv_color_hex(0x11111b), LV_PART_SELECTED);
-    lv_obj_set_style_border_width(r, 0, LV_PART_MAIN);
-    lv_roller_set_selected(r, selected, LV_ANIM_OFF);
-    return r;
+static lv_obj_t* plainBtn(lv_obj_t* parent, const char* text, lv_event_cb_t cb, uint32_t color, int x, int y, int w, int h, const lv_font_t* f) {
+    lv_obj_t* b = lv_btn_create(parent);
+    lv_obj_set_pos(b, x, y);
+    lv_obj_set_size(b, w, h);
+    lv_obj_set_style_bg_color(b, lv_color_hex(color), LV_PART_MAIN);
+    lv_obj_set_style_radius(b, 8, LV_PART_MAIN);
+    lv_obj_set_style_shadow_width(b, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(b, 0, LV_PART_MAIN);
+    lv_obj_set_style_text_color(b, lv_color_hex(0x11111b), LV_PART_MAIN);
+    lv_obj_set_style_text_font(b, f, LV_PART_MAIN);
+    lv_obj_t* l = lv_label_create(b);
+    lv_label_set_text(l, text);
+    lv_obj_center(l);
+    lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, nullptr);
+    return b;
 }
 
-static lv_obj_t* unitLabel(lv_obj_t* parent, const char* text) {
-    lv_obj_t* l = lv_label_create(parent);
-    lv_label_set_text(l, text);
-    lv_obj_set_style_text_font(l, alarm_large ? &lv_font_montserrat_28 : &lv_font_montserrat_20, LV_PART_MAIN);
-    lv_obj_set_style_text_color(l, lv_color_hex(0xcdd6f4), LV_PART_MAIN);
-    return l;
+static lv_obj_t* fieldBox(lv_obj_t* parent, lv_obj_t** label, lv_event_cb_t cb, int x, int y, int w, int h) {
+    lv_obj_t* b = lv_obj_create(parent);
+    lv_obj_set_pos(b, x, y);
+    lv_obj_set_size(b, w, h);
+    lv_obj_set_style_bg_color(b, lv_color_hex(0x1e1e2e), LV_PART_MAIN);
+    lv_obj_set_style_radius(b, 8, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(b, 0, LV_PART_MAIN);
+    lv_obj_set_style_text_font(b, &lv_font_montserrat_48, LV_PART_MAIN);
+    lv_obj_clear_flag(b, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(b, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, nullptr);
+    *label = lv_label_create(b);
+    lv_obj_center(*label);
+    return b;
 }
 
 static void dialogBuild() {
     if (set_dialog) return;
-    bool use24 = settings.getUse24HourFormat();
     const AlarmConfig& c = alarmClock.cfg();
+    ed_12h = !settings.getUse24HourFormat();
+    if (dlg_countdown) { ed_h = dlg_cd_hours; ed_m = dlg_cd_minutes; }
+    else if (ed_12h) { ed_h = c.hour % 12; if (ed_h == 0) ed_h = 12; ed_m = c.minute; ed_pm = c.hour >= 12; }
+    else { ed_h = c.hour; ed_m = c.minute; }
+    ed_field = 0; ed_digits = 0;
+
+    const lv_font_t* fs = alarm_large ? &lv_font_montserrat_20 : &lv_font_montserrat_14;
+    const lv_font_t* fm = alarm_large ? &lv_font_montserrat_28 : &lv_font_montserrat_20;
+    int W = lv_disp_get_hor_res(nullptr), H = lv_disp_get_ver_res(nullptr);
 
     set_dialog = lv_obj_create(lv_layer_top());
-    lv_obj_set_size(set_dialog, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_size(set_dialog, W, H);
+    lv_obj_set_pos(set_dialog, 0, 0);
     lv_obj_set_style_bg_color(set_dialog, lv_color_hex(0x11111b), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(set_dialog, 245, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(set_dialog, LV_OPA_COVER, LV_PART_MAIN);
     lv_obj_set_style_border_width(set_dialog, 0, LV_PART_MAIN);
     lv_obj_set_style_radius(set_dialog, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(set_dialog, 0, LV_PART_MAIN);
     lv_obj_clear_flag(set_dialog, LV_OBJ_FLAG_SCROLLABLE);
+
+    // Landscape: the fields and buttons on the left, the keypad on the right. Portrait: fields on top, keypad below.
+    bool tall = H > W;
+    int g = 6;
+    int colW = tall ? W - 2 * g : W * 49 / 100;          // the left column (or the top block)
+    int fieldW = (colW - 14) / 2, fieldH = alarm_large ? 72 : 56;
 
     lv_obj_t* title = lv_label_create(set_dialog);
     lv_label_set_text(title, dlg_countdown ? "Alarm in" : "Alarm at");
-    lv_obj_set_style_text_font(title, alarm_large ? &lv_font_montserrat_28 : &lv_font_montserrat_20, LV_PART_MAIN);
+    lv_obj_set_style_text_font(title, fm, LV_PART_MAIN);
     lv_obj_set_style_text_color(title, lv_color_hex(0xfab387), LV_PART_MAIN);
-    lv_obj_align(title, LV_ALIGN_TOP_LEFT, 8, 8);
+    lv_obj_set_pos(title, g + 2, g);
+
+    int fy = g + (alarm_large ? 36 : 28);
+    box_h = fieldBox(set_dialog, &lbl_h, box_h_cb, g, fy, fieldW, fieldH);
+    lv_obj_t* colon = lv_label_create(set_dialog);
+    lv_label_set_text(colon, ":");
+    lv_obj_set_style_text_font(colon, fm, LV_PART_MAIN);
+    lv_obj_set_style_text_color(colon, lv_color_hex(0xcdd6f4), LV_PART_MAIN);
+    lv_obj_set_pos(colon, g + fieldW + 3, fy + fieldH / 2 - (alarm_large ? 16 : 12));
+    box_m = fieldBox(set_dialog, &lbl_m, box_m_cb, g + fieldW + 14, fy, fieldW, fieldH);
+
+    int ry = fy + fieldH + g + 2;                       // the row under the fields
+    int rowH = alarm_large ? 50 : 40;
+    btn_am = btn_pm = nullptr;
+    if (dlg_countdown) {                                // name the two numbers
+        const char* names[2] = {"hours", "minutes"};
+        for (int i = 0; i < 2; i++) {
+            lv_obj_t* u = lv_label_create(set_dialog);
+            lv_label_set_text(u, names[i]);
+            lv_obj_set_style_text_font(u, fs, LV_PART_MAIN);
+            lv_obj_set_style_text_color(u, lv_color_hex(0xa6adc8), LV_PART_MAIN);
+            lv_obj_set_width(u, fieldW);
+            lv_obj_set_style_text_align(u, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+            lv_obj_set_pos(u, g + i * (fieldW + 14), ry + 2);
+        }
+    } else if (ed_12h) {
+        btn_am = plainBtn(set_dialog, "AM", am_cb, 0x313244, g, ry, fieldW, rowH, fm);
+        btn_pm = plainBtn(set_dialog, "PM", pm_cb, 0x313244, g + fieldW + 14, ry, fieldW, rowH, fm);
+    }
 
     lv_obj_t* cd = lv_checkbox_create(set_dialog);
     lv_checkbox_set_text(cd, "Count down");
-    lv_obj_set_style_text_font(cd, alarm_large ? &lv_font_montserrat_20 : &lv_font_montserrat_14, LV_PART_MAIN);
+    lv_obj_set_style_text_font(cd, fs, LV_PART_MAIN);
     lv_obj_set_style_text_color(cd, lv_color_hex(0xcdd6f4), LV_PART_MAIN);
     lv_obj_set_style_pad_all(cd, 4, LV_PART_INDICATOR);
     lv_obj_set_style_bg_color(cd, lv_color_hex(0x313244), LV_PART_INDICATOR);
@@ -186,55 +310,41 @@ static void dialogBuild() {
     lv_obj_set_ext_click_area(cd, 10);
     if (dlg_countdown) lv_obj_add_state(cd, LV_STATE_CHECKED);
     lv_obj_add_event_cb(cd, dialog_countdown_cb, LV_EVENT_VALUE_CHANGED, nullptr);
-    lv_obj_align(cd, LV_ALIGN_TOP_RIGHT, -8, 8);
+    lv_obj_set_pos(cd, g + 2, ry + rowH + g + 2);
 
-    lv_obj_t* row = lv_obj_create(set_dialog);
-    lv_obj_set_size(row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_set_style_border_width(row, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(row, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_gap(row, 8, LV_PART_MAIN);
-    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_align(row, LV_ALIGN_CENTER, 0, -2);
-
-    static char hours24[24 * 4], hours12[12 * 4], mins[60 * 4];
-    hours24[0] = hours12[0] = mins[0] = 0;
-    for (int i = 0; i < 24; i++) { char b[8]; snprintf(b, sizeof(b), "%d%s", i, i < 23 ? "\n" : ""); strcat(hours24, b); }
-    for (int i = 1; i <= 12; i++) { char b[8]; snprintf(b, sizeof(b), "%d%s", i, i < 12 ? "\n" : ""); strcat(hours12, b); }
-    for (int i = 0; i < 60; i++) { char b[8]; snprintf(b, sizeof(b), "%02d%s", i, i < 59 ? "\n" : ""); strcat(mins, b); }
-
-    int w = alarm_large ? 84 : 62;
-    roll_ampm = nullptr;
-    if (dlg_countdown) {                                // hours and minutes from now
-        roll_hour = roller(row, hours24, dlg_cd_hours, w);
-        unitLabel(row, "h");
-        roll_min = roller(row, mins, dlg_cd_minutes, w);
-        unitLabel(row, "min");
-    } else {                                            // the time of day
-        if (use24) {
-            roll_hour = roller(row, hours24, c.hour, w);
-        } else {
-            int h12 = c.hour % 12; if (h12 == 0) h12 = 12;
-            roll_hour = roller(row, hours12, h12 - 1, w);
-        }
-        unitLabel(row, ":");
-        roll_min = roller(row, mins, c.minute, w);
-        if (!use24) roll_ampm = roller(row, "AM\nPM", c.hour >= 12 ? 1 : 0, alarm_large ? 78 : 56);
+    int kx, ky, kw, kh, by;                             // keypad box, and the y of Cancel / Save
+    if (tall) {
+        by = ry + rowH + g + (alarm_large ? 44 : 34);
+        kx = g; ky = by + rowH + g; kw = W - 2 * g; kh = H - ky - g;
+    } else {
+        by = H - rowH - g;
+        kx = colW + 2 * g; ky = g; kw = W - kx - g; kh = H - 2 * g;
     }
+    plainBtn(set_dialog, "Cancel", dialog_cancel_cb, 0x6c7086, g, by, fieldW, rowH, fs);
+    plainBtn(set_dialog, dlg_countdown ? "Start" : "Save", dialog_save_cb, 0xa6e3a1, g + fieldW + 14, by, fieldW, rowH, fm);
 
-    lv_obj_t* btns = lv_obj_create(set_dialog);
-    lv_obj_set_size(btns, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(btns, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_bg_opa(btns, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_set_style_border_width(btns, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(btns, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_gap(btns, 12, LV_PART_MAIN);
-    lv_obj_clear_flag(btns, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_align(btns, LV_ALIGN_BOTTOM_MID, 0, -6);
-    smallButton(btns, "Cancel", dialog_cancel_cb, 0x6c7086);
-    smallButton(btns, dlg_countdown ? "Start" : "Save, every day", dialog_save_cb, 0xa6e3a1);
+    static const char* keys[] = {"1", "2", "3", "\n", "4", "5", "6", "\n", "7", "8", "9", "\n",
+                                 LV_SYMBOL_BACKSPACE, "0", LV_SYMBOL_RIGHT, ""};
+    lv_obj_t* pad = lv_btnmatrix_create(set_dialog);
+    lv_btnmatrix_set_map(pad, keys);
+    lv_obj_set_pos(pad, kx, ky);
+    lv_obj_set_size(pad, kw, kh);
+    lv_obj_set_style_bg_opa(pad, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(pad, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(pad, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_row(pad, alarm_large ? 8 : 6, LV_PART_MAIN);
+    lv_obj_set_style_pad_column(pad, alarm_large ? 8 : 6, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(pad, lv_color_hex(0x313244), LV_PART_ITEMS);
+    lv_obj_set_style_bg_color(pad, lv_color_hex(0xcba6f7), LV_PART_ITEMS | LV_STATE_PRESSED);
+    lv_obj_set_style_text_color(pad, lv_color_hex(0xcdd6f4), LV_PART_ITEMS);
+    lv_obj_set_style_text_color(pad, lv_color_hex(0x11111b), LV_PART_ITEMS | LV_STATE_PRESSED);
+    lv_obj_set_style_text_font(pad, &lv_font_montserrat_28, LV_PART_ITEMS);
+    lv_obj_set_style_radius(pad, 10, LV_PART_ITEMS);
+    lv_obj_set_style_shadow_width(pad, 0, LV_PART_ITEMS);
+    lv_obj_set_style_border_width(pad, 0, LV_PART_ITEMS);
+    lv_obj_add_event_cb(pad, keypad_cb, LV_EVENT_VALUE_CHANGED, nullptr);
+
+    fieldsShow();
 }
 
 static void set_cb(lv_event_t* e) {
@@ -242,6 +352,10 @@ static void set_cb(lv_event_t* e) {
     if (!dlg_countdown && alarmClock.cfg().enabled && !alarmClock.cfg().repeat) dlg_countdown = true;   // a count down is running: stay in that mode
     dialogBuild();
 }
+
+// For layout checks over the web API
+void showAlarmSetDialog(bool countdown) { dialogClose(); dlg_countdown = countdown; dialogBuild(); }
+void closeAlarmSetDialog() { dialogClose(); }
 
 // ---- the bar on the clock tab
 

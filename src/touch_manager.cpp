@@ -59,7 +59,8 @@ void TouchManager::begin() {
 }
 
 void TouchManager::reattach() {
-    touchSPI.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
+    // begin() returns at once when the bus is already up, so route the clock pin back to the SPI bus directly
+    spiAttachSCK(touchSPI.bus(), XPT2046_CLK);
 }
 
 bool TouchManager::isTouched() {

@@ -14,6 +14,8 @@ void alarmRingingSetTime(const char* time_str);
 void alarmRingingStopNow();                  // what the Stop button does (also used by the web API)
 void alarmRingingSnoozeNow();                // what the Snooze button does
 void testPlayAlarmSound(bool loop);           // the chosen alarm sound (music or beep), as the alarm would play it
+void showAlarmSetDialog(bool countdown);   // the Set popup, for layout checks
+void closeAlarmSetDialog();
 void startAlarmRinging();                    // ringing view + sound, from the main loop when the alarm is due
 
 #endif // UI_ALARM_H

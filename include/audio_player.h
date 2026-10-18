@@ -31,6 +31,7 @@ private:
     void* _gen = nullptr;      // AudioGeneratorRTTTL
     volatile bool _running = false;
     volatile bool _touchFix = false;
+    bool _repeatRound = false;   // the next start is a repeat of a looping sound: do not log it
     bool startCurrent();
     void teardown();
 };

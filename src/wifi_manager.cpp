@@ -682,6 +682,11 @@ void WifiManager::startWebServer() {
         audio.playBeep(false);
         _webServer->send(200, "text/plain", "Beeping");
     });
+    _webServer->on("/api/alarm/ring", HTTP_POST, [this]() {   // test: ring now, exactly as the alarm would
+        eventLog("web: ring now");
+        startAlarmRinging();
+        _webServer->send(200, "text/plain", "Ringing");
+    });
     _webServer->on("/api/alarm/stop", HTTP_POST, [this]() {
         if (alarmClock.isRinging()) alarmRingingStopNow(); else audio.stop();   // dismiss a ringing alarm, or just end a test sound
         _webServer->send(200, "text/plain", "Stopped");
@@ -845,7 +850,9 @@ void WifiManager::startWebServer() {
     _webServer->on("/api/ui/wifi", [this]() {
         if (!settings.getApiServerEnabled()) { _webServer->send(403, "text/plain", "Forbidden: API server disabled in settings"); return; }
         String page = _webServer->arg("page");
-        if (page == "password") showWifiPasswordPreview(); else if (page == "zip") showZipSetup(); else closeWifiSetup();
+        if (page == "password") showWifiPasswordPreview(); else if (page == "zip") showZipSetup();
+        else if (page == "alarm") showAlarmSetDialog(false); else if (page == "countdown") showAlarmSetDialog(true);
+        else { closeWifiSetup(); closeAlarmSetDialog(); }
         _webServer->send(200, "text/plain", "ok");
     });
     _webServer->on("/api/settings_tab", [this]() {
