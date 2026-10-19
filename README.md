@@ -15,8 +15,22 @@ It is built on [cyd-weather-station](https://github.com/nicholaswilde/cyd-weathe
   <img src="docs/images/ringing.png" width="320" alt="Alarm ringing">
 </p>
 
+## Special features
+
+1. **Cool lilac display.** Big lilac pixel digits on black, easy to read across a dark room and calm at night.
+2. **Uncluttered UX.** No tab bar and no small buttons along the edges. Each page shows one thing.
+3. **Tap blank space to move.** A tap anywhere empty slides up a menu of four big buttons: Clock, Weather, To-do, Setup.
+4. **Full settings from your phone.** Scan the QR code on the clock to open its web pages. From there you set the alarm, the to-do list and every app setting (Wi-Fi, location, units, theme, time zone), and read the event log or update the firmware.
+5. **Polished keyboards.**
+   - Big, phone-style keys for the Wi-Fi password and the alarm name.
+   - The name keyboard has a full-width name box and a ⌫ key beside "m".
+   - Its last row is Cancel | Space | OK.
+6. **Icons everywhere.** Weather icons on the clock and the forecast, a bell for the alarm (slashed when off), a down arrow for count down, and a pencil for the name.
+7. **Named alarms.** Give the alarm a name such as "school" or "medicine". When it rings, the name shows in bold under the time, so you know why you set it.
+
 ## Contents
 
+- [Special features](#special-features)
 - [Features](#features)
 - [Screens](#screens)
 - [Flows](#flows)
