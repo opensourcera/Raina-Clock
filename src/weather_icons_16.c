@@ -1,7 +1,7 @@
 /*******************************************************************************
  * Size: 16 px
  * Bpp: 4
- * Opts: --font assets/fonts/weathericons-regular-webfont.ttf -r 0xf002,0xf003,0xf008,0xf00a,0xf00d,0xf010,0xf021,0xf055,0xf07a,0xf07b --size 16 --format lvgl --bpp 4 --lv-include lvgl.h --no-compress -o src/weather_icons_16.c
+ * Opts: --font assets/fonts/weathericons-regular-webfont.ttf -r 0xf002,0xf003,0xf008,0xf00a,0xf00d,0xf010,0xf021,0xf055,0xf07a,0xf07b,0xf09a --size 16 --format lvgl --bpp 4 --lv-include lvgl.h --no-compress -o src/weather_icons_16.c
  ******************************************************************************/
 
 #ifdef LV_LVGL_H_INCLUDE_SIMPLE
@@ -266,7 +266,15 @@ static LV_ATTRIBUTE_LARGE_CONST const uint8_t glyph_bitmap[] = {
     0x99, 0x3f, 0x5e, 0xa0, 0xf9, 0x7f, 0xf0, 0xe3,
     0x9f, 0xff, 0xf1, 0xf9, 0xd, 0xf5, 0xd0, 0xeb,
     0x26, 0xf6, 0x0, 0x0, 0x0, 0x10, 0x0, 0x0,
-    0x0
+    0x0,
+
+    /* U+F09A "" */
+    0x0, 0x0, 0x0, 0xb, 0xc6, 0x0, 0x0, 0x5f,
+    0xfc, 0x10, 0x0, 0xff, 0xfc, 0x0, 0xd, 0xff,
+    0xf6, 0x0, 0xbf, 0xff, 0xc0, 0xa, 0xff, 0xff,
+    0x0, 0xaf, 0xff, 0xf0, 0xb, 0xff, 0xfc, 0x0,
+    0xdf, 0xff, 0x60, 0xf, 0xff, 0xc0, 0x4, 0xff,
+    0xc1, 0x0, 0xac, 0x60, 0x0, 0x0
 };
 
 
@@ -285,7 +293,8 @@ static const lv_font_fmt_txt_glyph_dsc_t glyph_dsc[] = {
     {.bitmap_index = 1439, .adv_w = 276, .box_w = 18, .box_h = 7, .ofs_x = 0, .ofs_y = 2},
     {.bitmap_index = 1502, .adv_w = 136, .box_w = 9, .box_h = 20, .ofs_x = 0, .ofs_y = -3},
     {.bitmap_index = 1592, .adv_w = 189, .box_w = 14, .box_h = 17, .ofs_x = -1, .ofs_y = -3},
-    {.bitmap_index = 1711, .adv_w = 217, .box_w = 14, .box_h = 7, .ofs_x = 0, .ofs_y = 2}
+    {.bitmap_index = 1711, .adv_w = 217, .box_w = 14, .box_h = 7, .ofs_x = 0, .ofs_y = 2},
+    {.bitmap_index = 1760, .adv_w = 192, .box_w = 7, .box_h = 13, .ofs_x = 6, .ofs_y = 0}
 };
 
 /*---------------------
@@ -294,15 +303,15 @@ static const lv_font_fmt_txt_glyph_dsc_t glyph_dsc[] = {
 
 static const uint16_t unicode_list_0[] = {
     0x0, 0x1, 0x6, 0x8, 0xb, 0xe, 0x1f, 0x53,
-    0x78, 0x79
+    0x78, 0x79, 0x98
 };
 
 /*Collect the unicode lists and glyph_id offsets*/
 static const lv_font_fmt_txt_cmap_t cmaps[] =
 {
     {
-        .range_start = 61442, .range_length = 122, .glyph_id_start = 1,
-        .unicode_list = unicode_list_0, .glyph_id_ofs_list = NULL, .list_length = 10, .type = LV_FONT_FMT_TXT_CMAP_SPARSE_TINY
+        .range_start = 61442, .range_length = 153, .glyph_id_start = 1,
+        .unicode_list = unicode_list_0, .glyph_id_ofs_list = NULL, .list_length = 11, .type = LV_FONT_FMT_TXT_CMAP_SPARSE_TINY
     }
 };
 

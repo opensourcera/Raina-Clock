@@ -1894,6 +1894,11 @@ const char* getIconGlyph(int code) {
     }
 }
 
+// At night a clear or mainly clear sky shows a fat crescent moon (wi-moon-waxing-crescent-6, f09a) instead of the sun
+static bool clearNight(int code, bool isDay) { return !isDay && (code == 0 || code == 1); }
+const char* getIconGlyph(int code, bool isDay) { return clearNight(code, isDay) ? "\xef\x82\x9a" : getIconGlyph(code); }
+uint32_t getIconColor(int code, bool isDay) { return clearNight(code, isDay) ? 0xf9e2af : getIconColor(code); }
+
 uint32_t getIconColor(int code) {
     switch (code) {
         case 0:

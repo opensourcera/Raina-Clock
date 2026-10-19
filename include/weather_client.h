@@ -17,6 +17,7 @@ struct HourlyForecast {
     int precipitationProbability = 0;
     int weatherCode = -1;
     int hour = -1;              // local hour of day, 0-23; -1 unknown
+    bool isDay = true;          // between sunrise and sunset
 };
 
 static const int FORECAST_DAYS = 7;
@@ -32,6 +33,7 @@ struct WeatherData {
     String cityName;
     ForecastDay forecast[7];
     HourlyForecast hourly[24];
+    bool isDay;                 // the current weather is between sunrise and sunset (no default: keeps the brace initialisers)
 };
 
 class WeatherClient {

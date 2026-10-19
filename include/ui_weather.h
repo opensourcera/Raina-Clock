@@ -12,5 +12,7 @@ void weatherPanelsUpdate(const WeatherData& data);
 
 const char* getIconGlyph(int code);      // ui.cpp: weather icon font glyph for a WMO code
 uint32_t getIconColor(int code);
+const char* getIconGlyph(int code, bool isDay);   // clear skies at night show a crescent moon
+uint32_t getIconColor(int code, bool isDay);
 
 #endif // UI_WEATHER_H

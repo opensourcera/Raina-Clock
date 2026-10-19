@@ -148,6 +148,7 @@ WeatherData WeatherClient::fetchWeather() {
     _longitude = settings.getLongitude();
     _useZip = (_zipCode.length() > 0 && _zipCode != "YOUR_ZIP_CODE");
     WeatherData data = { 0.0f, 0, "Unknown", false, -1, 0.0f, 0, "", {} };
+    data.isDay = true;
 
     bool useOWM = (settings.getOwmApiKey().length() > 0);
 
@@ -219,9 +220,9 @@ WeatherData WeatherClient::fetchWeather() {
         url += lat;
         url += "&longitude=";
         url += lng;
-        url += "&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m";
+        url += "&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,is_day";
         url += "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=7";
-        url += "&hourly=temperature_2m,precipitation_probability,weather_code";
+        url += "&hourly=temperature_2m,precipitation_probability,weather_code,is_day";
         url += "&forecast_hours=24";
         url += "&timezone=auto"; // Return dates in local timezone, not UTC
         if (settings.getUnitSystem() == UNIT_IMPERIAL) {
@@ -293,6 +294,7 @@ static bool parseWeatherDoc(JsonDocument& doc, WeatherData& data, time_t ref_tim
         data.windDirection = doc["current"]["wind_direction_10m"].is<int>() ? doc["current"]["wind_direction_10m"].as<int>() : 0;
         data.valid = true;
         data.weatherCode = code;
+        data.isDay = doc["current"]["is_day"] | 1;
     }
 
     // Parse hourly forecast
@@ -301,6 +303,7 @@ static bool parseWeatherDoc(JsonDocument& doc, WeatherData& data, time_t ref_tim
         JsonArray hourly_precip = doc["hourly"]["precipitation_probability"];
         JsonArray hourly_code = doc["hourly"]["weather_code"];
         JsonArray hourly_times = doc["hourly"]["time"];
+        JsonArray hourly_day = doc["hourly"]["is_day"];
 
         int start_idx = 0;
         if (doc.containsKey("hourly") && doc["hourly"].containsKey("time")) {
@@ -346,6 +349,7 @@ static bool parseWeatherDoc(JsonDocument& doc, WeatherData& data, time_t ref_tim
                 data.hourly[i].precipitationProbability = 0;
             }
             data.hourly[i].weatherCode = src_idx < (int)hourly_code.size() ? hourly_code[src_idx].as<int>() : -1;
+            data.hourly[i].isDay = src_idx < (int)hourly_day.size() ? hourly_day[src_idx].as<int>() != 0 : true;
             const char* ht = src_idx < (int)hourly_times.size() ? hourly_times[src_idx].as<const char*>() : nullptr;
             data.hourly[i].hour = (ht && strlen(ht) >= 13) ? (ht[11] - '0') * 10 + (ht[12] - '0') : -1;   // "2026-10-18T14:00"
         }
@@ -709,6 +713,7 @@ String WeatherClient::serializeWeatherData(const WeatherData& data) {
     doc["wind_spd"] = data.windSpeed;
     doc["wind_dir"] = data.windDirection;
     doc["city"] = data.cityName;
+    doc["day"] = data.isDay;
 
     JsonArray forecast = doc.createNestedArray("forecast");
     for (int i = 0; i < FORECAST_DAYS; i++) {
@@ -728,6 +733,7 @@ String WeatherClient::serializeWeatherData(const WeatherData& data) {
         hHour["precip"] = data.hourly[i].precipitationProbability;
         hHour["code"] = data.hourly[i].weatherCode;
         hHour["h"] = data.hourly[i].hour;
+        hHour["day"] = data.hourly[i].isDay;
     }
 
     String output;
@@ -751,6 +757,7 @@ bool WeatherClient::deserializeWeatherData(const String& json, WeatherData& data
     data.windSpeed = doc["wind_spd"] | 0.0f;
     data.windDirection = doc["wind_dir"] | 0;
     data.cityName = doc["city"].as<String>();
+    data.isDay = doc["day"] | true;
 
     JsonArray forecast = doc["forecast"];
     if (!forecast.isNull()) {
@@ -773,6 +780,7 @@ bool WeatherClient::deserializeWeatherData(const String& json, WeatherData& data
             data.hourly[i].precipitationProbability = hHour["precip"] | 0;
             data.hourly[i].weatherCode = hHour["code"] | -1;
             data.hourly[i].hour = hHour["h"] | -1;
+            data.hourly[i].isDay = hHour["day"] | true;
         }
     }
     return true;

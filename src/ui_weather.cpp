@@ -94,11 +94,11 @@ void createClockWeatherPanel(lv_obj_t* tab, int x, int w, bool isLargeScreen) {
 
 static void deg(char* b, size_t n, float v) { snprintf(b, n, "%.0f\xC2\xB0", v); }
 
-static void fillCard(Card& c, const char* top, int code, float temp, const float* low, int rain) {
+static void fillCard(Card& c, const char* top, int code, float temp, const float* low, int rain, bool isDay = true) {
     char b[16];
     lv_label_set_text(c.top, top);
-    lv_label_set_text(c.icon, getIconGlyph(code));
-    lv_obj_set_style_text_color(c.icon, lv_color_hex(getIconColor(code)), LV_PART_MAIN);
+    lv_label_set_text(c.icon, getIconGlyph(code, isDay));
+    lv_obj_set_style_text_color(c.icon, lv_color_hex(getIconColor(code, isDay)), LV_PART_MAIN);
     deg(b, sizeof(b), temp); lv_label_set_text(c.temp, b);
     if (c.low) { if (low) { deg(b, sizeof(b), *low); lv_label_set_text(c.low, b); } else lv_label_set_text(c.low, ""); }
     snprintf(b, sizeof(b), "%d%%", rain);
@@ -111,8 +111,8 @@ void weatherPanelsUpdate(const WeatherData& data) {
     char b[48];
 
     if (now_temp) {
-        lv_label_set_text(now_icon, getIconGlyph(data.weatherCode));
-        lv_obj_set_style_text_color(now_icon, lv_color_hex(getIconColor(data.weatherCode)), LV_PART_MAIN);
+        lv_label_set_text(now_icon, getIconGlyph(data.weatherCode, data.isDay));
+        lv_obj_set_style_text_color(now_icon, lv_color_hex(getIconColor(data.weatherCode, data.isDay)), LV_PART_MAIN);
         deg(b, sizeof(b), data.temperature); lv_label_set_text(now_temp, b);
     }
     setHeaderCity(data.cityName.c_str());
@@ -126,7 +126,7 @@ void weatherPanelsUpdate(const WeatherData& data) {
         else if (use24) snprintf(t, sizeof(t), "%02d:00", h.hour);
         else snprintf(t, sizeof(t), "%d%s", h.hour % 12 == 0 ? 12 : h.hour % 12, h.hour < 12 ? "am" : "pm");
         if (i == 0) snprintf(t, sizeof(t), "Now");
-        fillCard(hour_cards[i], t, h.weatherCode, h.temperature, nullptr, h.precipitationProbability);
+        fillCard(hour_cards[i], t, h.weatherCode, h.temperature, nullptr, h.precipitationProbability, h.isDay);
     }
 
     static const char* wd[7] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};

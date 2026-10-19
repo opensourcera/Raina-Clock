@@ -35,6 +35,7 @@ static bool isFog(int c) { return c == 45 || c == 48; }
 static const int HOURS = 12;
 static HourlyForecast hours[24];
 static int cur_code = -1;
+static bool cur_day = true;
 static bool have_data = false;
 static int demo = -1;
 
@@ -106,8 +107,8 @@ static void show() {
     last = k;
     int ic = (k == NICE && cur_code > 2) ? cur_code : m.icon;   // a calm but cloudy day shows its clouds
     if (k == NICE && cur_code > 2) lv_label_set_text(text, "Calm weather today");
-    lv_label_set_text(icon, getIconGlyph(ic));
-    lv_obj_set_style_text_color(icon, lv_color_hex(getIconColor(ic)), LV_PART_MAIN);
+    lv_label_set_text(icon, getIconGlyph(ic, cur_day));
+    lv_obj_set_style_text_color(icon, lv_color_hex(getIconColor(ic, cur_day)), LV_PART_MAIN);
     lv_obj_set_style_bg_color(bubble, lv_color_hex(m.bubble), LV_PART_MAIN);
     blinking = m.blink;
     if (!blinking) lv_obj_set_style_opa(icon, LV_OPA_COVER, LV_PART_MAIN);
@@ -142,6 +143,7 @@ void createWeatherAlert(lv_obj_t* tab, bool isLargeScreen) {
 void weatherAlertUpdate(const WeatherData& data) {
     for (int i = 0; i < 24; i++) hours[i] = data.hourly[i];
     cur_code = data.weatherCode;
+    cur_day = data.isDay;
     have_data = true;
     show();
 }
