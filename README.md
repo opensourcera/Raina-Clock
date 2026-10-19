@@ -36,6 +36,7 @@ It is built on [cyd-weather-station](https://github.com/nicholaswilde/cyd-weathe
 - [Flows](#flows)
 - [Phone pages and API](#phone-pages-and-api)
 - [Hardware](#hardware)
+- [Case](#case)
 - [Build and flash](#build-and-flash)
 - [Project layout](#project-layout)
 - [Credits and licenses](#credits-and-licenses)
@@ -251,6 +252,19 @@ Example:
 - **Speaker:** on the SPEAK connector (GPIO 26 through the on-board amplifier). The tiny built-in speaker works; a 4 ohm speaker is much louder.
 - **Optional:** a DHT22 sensor and an SD card, as in the upstream project.
 - **Other boards:** other CYD variants are listed in [docs/hardware-variants.md](docs/hardware-variants.md). This firmware is tested on the `cyd_28r` build.
+
+## Case
+
+The clock sits in a 3D-printed, battery-powered desk case tilted at 32 degrees:
+
+- **Model:** "CYD Desk Buddy for Bambu Lab / Home Assistant" by **annaglyph** on [MakerWorld](https://makerworld.com/).
+- **Print profile:** "Battery Powered 32 Degree - 0.12mm layer, 2 walls, 15% infill" by **SFAJeff**. It adds room for a battery, a charger and a power button.
+- **Battery parts** (from the profile):
+  - a V713 USB-C 5V 2A boost converter and charger
+  - an LP103665 3.7 V 3000 mAh LiPo battery
+  - a JST 1.25 mm connector (or solder the battery)
+  - a 6x6 mm push button
+- **Licence:** the model is published under the MakerWorld Exclusive License, so the 3MF file is not included here. Download it from MakerWorld by searching for "CYD Desk Buddy".
 
 ## Build and flash
 
