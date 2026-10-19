@@ -88,7 +88,9 @@ A short message bubble on the Clock page, like a chat message, chosen from the h
 
 ### Weather page
 
-The next hours, with temperature and chance of rain, and the next 7 days with highs and lows.
+- **Hourly:** a Google-style graph of the next 24 hours, one point every 3 hours, with the temperature above each point and the sky and the hour below.
+- **Night icons:** clear nights show a crescent moon.
+- **Daily:** the next 7 days, with highs, lows and the chance of rain.
 
 ### To-do
 
@@ -124,7 +126,7 @@ The next hours, with temperature and chance of rain, and the next 7 days with hi
 |---|---|---|
 | <img src="docs/images/clock.png" width="240"><br>Clock with the weather and a calm message | <img src="docs/images/clock-rain.png" width="240"><br>Rain coming | <img src="docs/images/clock-storm.png" width="240"><br>Storm coming (blinking icon) |
 | <img src="docs/images/set-time.png" width="240"><br>Set the alarm time | <img src="docs/images/set-countdown.png" width="240"><br>Count down (down arrow lit) | <img src="docs/images/name-keyboard.png" width="240"><br>Name keyboard |
-| <img src="docs/images/ringing.png" width="240"><br>Ringing, with the name in bold | <img src="docs/images/menu.png" width="240"><br>Page menu (tap empty space) | <img src="docs/images/weather.png" width="240"><br>Weather: hours and 7 days |
+| <img src="docs/images/ringing.png" width="240"><br>Ringing, with the name in bold | <img src="docs/images/menu.png" width="240"><br>Page menu (tap empty space) | <img src="docs/images/weather.png" width="240"><br>Weather: hourly graph and 7 days |
 | <img src="docs/images/todo.png" width="240"><br>To-do with the QR code | <img src="docs/images/qr.png" width="240"><br>Open the phone page | <img src="docs/images/clock-freezing.png" width="240"><br>Freezing night |
 | <img src="docs/images/setup-weather.png" width="240"><br>Setup: Weather | <img src="docs/images/setup-audio.png" width="240"><br>Setup: Audio | <img src="docs/images/setup-look.png" width="240"><br>Setup: Look |
 
