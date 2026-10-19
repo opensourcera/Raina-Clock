@@ -1,724 +1,294 @@
-# :partly_sunny: CYD Weather Station :pager:
-[![Coveralls](https://img.shields.io/badge/dynamic/xml?url=https%3A%2F%2Fcoveralls.io%2Frepos%2Fgithub%2Fnicholaswilde%2Fcyd-weather-station%2Fbadge.svg%3Fbranch%3Dmain&query=%2F%2F*%5Blocal-name()%3D'text'%5D%5Blast()%5D&label=Coveralls&style=for-the-badge&logo=coveralls)](https://coveralls.io/github/nicholaswilde/cyd-weather-station?branch=main)
-[![task](https://img.shields.io/badge/Task-Enabled-brightgreen?style=for-the-badge&logo=task&logoColor=white)](https://taskfile.dev/#/)
-[![test](https://img.shields.io/github/actions/workflow/status/nicholaswilde/cyd-weather-station/test.yaml?label=test&style=for-the-badge&branch=main&logo=github-actions)](https://github.com/nicholaswilde/cyd-weather-station/actions/workflows/test.yaml)
-[![ci](https://img.shields.io/github/actions/workflow/status/nicholaswilde/cyd-weather-station/ci.yaml?label=ci&style=for-the-badge&logo=github-actions)](https://github.com/nicholaswilde/cyd-weather-station/actions/workflows/ci.yaml)
+# Raina Clock
 
-A beautiful, configurable real-time weather station and desk clock built for the **ESP32 Cheap Yellow Device (CYD)** family (such as the 2.8" Resistive **ESP32-2432S028R**, 2.8" Capacitive **ESP32-2432W328C**, and 3.5" Capacitive **ESP32-3248S035C**) utilizing the **LVGL v8** graphics library, **Open-Meteo / OpenWeatherMap APIs**, and the **Catppuccin Color Theme**.
+Raina Clock is a bedside alarm clock for the **Cheap Yellow Display** (ESP32-2432S028R, a 2.8" 320x240 touch screen).
+- It shows a big clock with the weather beside it.
+- It wakes you with a named alarm.
+- It warns you about rain or storms in short chat-style messages.
+- It keeps a small daily to-do list.
 
-> [!WARNING]
-> This project is currently in a `v0.X.X` development stage. Features and configurations are subject to change, and breaking changes may be introduced at any time.
+You set everything on the touch screen or from a phone on the same Wi-Fi.
 
-## :star: Features
+It is built on [cyd-weather-station](https://github.com/nicholaswilde/cyd-weather-station) by Nicholas Wilde (Apache-2.0).
 
-- **Dual API Integration**: 
-  - **Open-Meteo API**: Out-of-the-box fallback — no API key required. Automatically fetches 24-hour rolling hourly forecasts and 3-day daily forecasts in the user's local timezone.
-  - **OpenWeatherMap API**: Automatically used if an API key is configured.
-- **Location Resolution & City Name Footer**:
-  - Displays `Last Update: <time> | <city name>` centered at the bottom of the screen.
-  - **Zip Code Geocoding**: Enter a US Zip Code (e.g. `90210`); coordinates are resolved on boot.
-  - **IP Geolocation Fallback**: Automatically falls back to resolving location via IP geolocation (using `ip-api.com`) on boot if Zip Code and coordinates are left blank.
-  - **Reverse Geocoding**: When using coordinates + Open-Meteo, the city is resolved using Nominatim OSM. OWM resolves and returns the city name natively.
-- **3-Day Forecast View**: Swipe to a dedicated Forecast tab showing daily high/low temperature and weather condition icons.
-- **24-Hour Hourly Forecast Chart**: Dedicated Hourly tab plotting dynamic temperature and precipitation probability curves across a 24-hour rolling window with 4-hour interval tick labels (`Now`, `+4h`, `+8h`, `+12h`, `+16h`, `+20h`, `+24h`).
-- **Swipe Navigation**: Swipe left/right anywhere on the screen to switch between the Current Weather, 3-Day Forecast, 24-Hour Hourly Forecast, and System Settings tabs.
-- **Dynamic Weather Icons**: A large (48px) custom weather glyph maps weather codes to condition icons, dynamically colored using the active Catppuccin palette.
-- **Interactive Settings Tab**: Touch-configurable settings persisted to flash across reboots:
-  - **Temperature Unit**: Toggle between Celsius (°C) and Fahrenheit (°F).
-  - **Catppuccin Theme Flavor**: Choose between Mocha, Macchiato, Frappé, or Latte — the full UI redraws instantly in the selected palette.
-  - **Auto Brightness**: Toggle automatic backlight dimming/brightening driven by the onboard LDR light sensor (GPIO 34) with smooth non-linear perceptual scaling.
-  - **Manual Brightness**: Slider to set a fixed screen brightness level with natural $\gamma = 2.2$ gamma correction.
-  - **Timezone**: `–` / `+` buttons to cycle through common IANA timezone presets with automatic DST handling powered by AceTime.
-  - **SD Log**: Enable/disable weather logging to a microSD card.
-  - **SD Cache**: Enable/disable weather caching to a microSD card (restores UI offline).
-  - **Screenshot Server**: Enable/disable the remote screenshot HTTP server.
-  - **MQTT**: Toggle publishing weather variables to MQTT topics with a configurable base topic (default `cyd/`).
-  - **MQTT Integration & Remote Control**:
-    - **Configurable Base Topic**: Customize the base topic (e.g. `home/living_room/weather/`) via the web settings portal.
-    - **Home Assistant Auto-Discovery**: Automatically exposes entities for weather sensors (temp, humidity, wind speed/direction, condition, city), device diagnostics (uptime, heap, RSSI, IP, version, MAC), configuration controls (screen & LED brightness, auto brightness, theme flavor, units, orientation, update interval, screensaver timeout, status LED, SD log/cache), and device restart button.
-    - **Bidirectional Remote Control**: Change any setting or command via MQTT topics with immediate on-screen and Home Assistant state synchronization.
-    - **LWT & Robust Reconnection**: Reports online/offline availability via Last Will and Testament (LWT) on `<base_topic>status` with MAC-based unique client IDs, paced discovery message queueing, and exponential reconnection backoff (5s to 2min).
-  - **Screensaver**: Enable/disable screensaver mode (smoothly fades backlight using gamma interpolation and displays clock after inactivity).
-  - **Sleep Schedule**: Enable/disable automatic screen sleep during a configured time frame (e.g. 22:00 to 07:00).
-  - **Screen Orientation**: Choose between Landscape, Portrait, Landscape Rev, or Portrait Rev—the entire UI dynamically scales/stacks, header height dynamically increases to 60px in portrait to fit a wrapped two-line title without overlaps, and touch coordinates update instantly.
-- **Auto-Brightness & Gamma Scaling**: Uses the LDR photoresistor (GPIO 34) with an EMA filter and a perceptual $\gamma = 2.2$ gamma curve feeding LEDC PWM (GPIO 21) to smoothly adapt screen brightness to ambient light.
-- **NTP Time Synchronization**: Connects to NTP on boot and keeps a live clock in the header bar, respecting the configured IANA timezone with full DST support.
-- **RGB LED Status Indicator**: Onboard RGB LED (GPIO 4/16/17) with gamma-corrected brightness provides Wi-Fi status feedback (blinking blue for connecting, solid green for connected, fast red for disconnected, slow purple blink for AP Mode) and a brief weather-condition color pulse on updates.
-- **Custom Hostname & mDNS**: Configurable network hostname (default `cyd-weather-station`) registered with DHCP (`WiFi.setHostname`) and mDNS responder (`MDNS.begin`) for access via `http://<hostname>.local/` without needing to find the device IP address.
-- **Web Dashboard & Settings Portal**:
-  - Access `http://<DEVICE_IP>/` or `http://<hostname>.local/` (e.g. `http://cyd-weather-station.local/`) in any browser for a central Catppuccin-themed dashboard.
-  - Includes direct navigation links to Device Settings (`/settings`), Firmware Updates (`/update`), Live Screenshots (`/screenshot`), Clear SD Logs (`/clear_logs`), Clear SD Cache (`/clear_cache`), and Factory Reset (`/reset`).
-  - Settings portal automatically redirects back to the main dashboard after saving settings once the device comes back online.
-- **Wi-Fi AP Captive Portal Fallback**:
-  - Automatically hosts an open Soft AP (`cyd-weather-station-<mac_short>`) if connection fails or times out after 30 seconds on boot.
-  - Runs a captive portal configuration web server and DNS redirector on `192.168.4.1` for selecting networks, setting Wi-Fi credentials, and configuring your location (Zip Code or Coordinates).
-  - Runs background async Wi-Fi scans after AP initialization to prevent client disconnections (common on ESP32 during active/blocking scans).
-  - Web interface `/scan` triggers background scanning with a friendly redirect loader screen, displaying updated networks on completion.
-  - Dynamically displays step-by-step connection instructions (SSID name and IP address) directly on the screen while AP Mode is active.
-  - Colors the header Wi-Fi icon **Mauve** when in setup configuration mode.
-- **SD Card Weather Logging**:
-  - Automatically mounts a microSD card on boot and appends weather records (timestamp, temperature, humidity, wind speed, wind direction, weather code) to `/weather_history.csv` on the root of the card.
-  - Automatic formatting fallback to FAT32 on mount failure.
-- **Screenshot Capture**:
-  - **Remote via HTTP**: `GET /screenshot` streams a pixel-perfect 24-bit BMP of the current screen directly over Wi-Fi.
-  - **Physical button**: Press and hold the BOOT button (GPIO 0) for 2 seconds to save a timestamped BMP to the SD card as `/screenshot_YYYYMMDD_HHMMSS.bmp`. A single quick press of the BOOT button triggers an immediate weather refresh.
-  - Zero large-allocation design — screen tiles are intercepted from the LVGL flush callback and written directly to file.
-  - Toggle the screenshot server on/off from the **Settings tab** (`API Srv`).
-- **SD Offline Cache Recovery**:
-  - Automatically caches the latest retrieved weather data to `/weather_cache.json` on the microSD card.
-  - If the device boots without Wi-Fi, it restores the weather screen from the cache instead of displaying blank widgets, displaying a `⚠️ Offline` status badge in the header.
-- **Wireless OTA Firmware Updates**:
-  - Easily update firmware wirelessly by navigating to `/update` in a browser when connected to the configuration AP (`http://192.168.4.1/update`) or the local network IP (`http://<DEVICE_IP>/update` when the Screenshot Server is enabled).
-  - Portal features a responsive Catppuccin-themed HTML interface, drag-and-drop binary selector, dynamic progress bar, error handling, and auto-reboot upon completion.
+<p>
+  <img src="docs/images/clock.png" width="320" alt="Clock page">
+  <img src="docs/images/ringing.png" width="320" alt="Alarm ringing">
+</p>
 
+## Contents
 
-## :hammer_and_wrench: Hardware Requirements
+- [Features](#features)
+- [Screens](#screens)
+- [Flows](#flows)
+- [Phone pages and API](#phone-pages-and-api)
+- [Hardware](#hardware)
+- [Build and flash](#build-and-flash)
+- [Project layout](#project-layout)
+- [Credits and licenses](#credits-and-licenses)
 
-- **ESP32 Cheap Yellow Device (CYD)**:
-  - **CYD 2.8" (Resistive)**: ESP32-2432S028R — 2.8″ 320×240 ILI9341 LCD with XPT2046 resistive touch.
-  - **CYD 2.8" (Capacitive)**: ESP32-JC2432W328C — 2.8″ 320×240 ST7789 LCD with CST816 capacitive touch.
-  - **CYD 2.8" NodeMiner / Rockbase (Resistive)**: ESP32-2432S028 ("NM") — 2.8″ 320×240 ST7789 LCD with XPT2046 resistive touch.
-  - **CYD 3.5" (Capacitive)**: ESP32-3248S035C — 3.5″ 480×320 ST7796 LCD with GT911/CST820 capacitive touch.
-- **Onboard Sensors**: LDR photoresistor (GPIO 34), Backlight PWM (GPIO 21), RGB LED (GPIO 4/16/17), BOOT button (GPIO 0).
-- **Storage**: MicroSD card slot (compatible with standard FAT32 formatted cards).
-- Micro-USB cable for power and programming.
+## Features
 
-## :electric_plug: Hardware Setup / Sensor Wiring
+### Clock
 
-To read local temperature and humidity, you can wire a sensor directly to the CYD board. 
+- **Digits:** large lilac digits in a square-pixel font (Electronic Highway Sign). Hours and minutes sit on one line, the seconds below, and the colon stays on.
+- **Weather:** the current weather icon and temperature sit beside the time.
+- **Alarm bell:** at the bottom left. It is slashed when no alarm is set; otherwise it shows the alarm time and the time left. Tap it to set the alarm.
 
-> [!NOTE]
-> Currently, the **DHT22 (AM2302)**, **DHT11**, and **SHT40 (I2C)** temperature and humidity sensors are supported.
+### Alarm
 
-### DHT11 / DHT22 Wiring
-Connect the DHT sensor to the **CN1** breakout port:
-- **VCC**: 3V3
-- **GND**: GND
-- **Data/Signal**: IO22
+- **Types:** there is one alarm. It rings at a time of day (every day or once) or as a **count down** (hours and minutes from now).
+- **Keypad:** a big number keypad with AM/PM buttons. A single down-arrow button switches between time of day and count down.
+- **Alarm name:**
+  - Tap the pencil button to type a name on a full-screen keyboard: lowercase letters and spaces, up to 20 characters.
+  - When the alarm rings, the name shows in bold under the time, for example "school" or "medicine".
+- **Ringing screen:** **Snooze** (9 minutes by default) and **Stop**. Touch keeps working while it rings.
+- **No answer:** an alarm nobody answers snoozes itself after 5 minutes. After the third time it stops for good.
+- **Sound:** a loud built-in beep that needs no SD card. Volume goes from 0 to 100 %.
 
-    ```text
-    +------------------------------+
-    |                              |
-    |                          +------+
-    |                          |  P3  |
-    |                          +------+
-    |                              |
-    |                       +---------+
-    |                       |   CN1   |      +--------------+
-    |                       |  GND[X] |------| [X]GND       |
-    |                       | IO22[X] |------| [X]SIG / OUT |
-    |                       | IO27[ ] |      |              |
-    |                       | 3.3V[X] |------| [X]VCC       |
-    |                       +---------+      +--------------+ 
-    |                              |           DHT11 / DHT22
-    |                          +------+     
-    |                          |  SD  |
-    |                          | CARD |
-    |                          +------+
-    |                              |
-    | +--+ +-------+ +-----------+ |
-    +-|  |-| USB C |-| MICRO USB |-+
-      +--+ +-------+ +-----------+ 
-             ESP32-2432S028R  
-    ```
+### Weather messages
 
-    ```text
-    +------------------------------+
-    |                              |
-    |                          +------+
-    |                          |  P3  |
-    |                          +------+
-    |                              |
-    |                       +---------+
-    |                       |   CN1   |      +--------------+
-    |                       |  GND[X] |------| [X]GND       |
-    |                       | IO22[X] |------| [X]Sig / OUT |
-    |                       | IO21[ ] |      |              |
-    |                       | 3.3V[X] |------| [X]VCC       |
-    |                       +---------+      +--------------+ 
-    |                              |           DHT11 / DHT22
-    |                          +------+         
-    |                          |  SD  |
-    |                          | CARD |
-    |                          +------+
-    |                              |
-    | +--+           +-----------+ |
-    +-|  |-----------| MICRO USB |-+
-      +--+           +-----------+ 
-             ESP32-3248S035C  
-    ```
+A short message bubble on the Clock page, like a chat message, chosen from the hourly forecast:
 
-### SHT40 (I2C) Wiring
-Connect the SHT40 sensor to the **CN1** breakout port (do not use connector P3 as it lacks a 3.3V power supply):
-- **VCC**: 3V3
-- **GND**: GND
-- **SDA**: IO27 (on `cyd_28r` / `cyd_28_nm`) or IO21 (on `cyd_35c` / `cyd_28c`)
-> [!NOTE]
-> On the `cyd_28r` and `cyd_28_nm` boards, the CN1 connector breaks out **IO27**. IO27 must be used for SDA to prevent conflicts with the display backlight on IO21.
-> On the `cyd_35c` and `cyd_28c` boards, the CN1 connector breaks out **IO21**. IO21 must be used for SDA to prevent conflicts with the display backlight on IO27.
-- **SCL**: IO22
+| Situation | Message |
+|---|---|
+| Thunderstorm now | Storm now. Stay inside! |
+| Thunderstorm in the next 3 hours | Storm coming. Stay inside |
+| Snow in the next 3 hours | Snow soon. Dress warm |
+| Rain now | Raining. Take an umbrella |
+| Rain in 1-2 hours | Rain in ~40 min. Umbrella! |
+| Rain in 3-8 hours | Rain later. Pack an umbrella |
+| A night hour at or below freezing in the next 12 hours | Freezing night. Dress warm |
+| A drop of 10 °F (6 °C) within 3 hours | Getting colder. Grab a jacket |
+| A rise of 10 °F (6 °C) within 3 hours | Warming up. Dress light |
+| 95 °F (35 °C) or more | Hot today. Drink water |
+| Fog | Foggy. Drive carefully |
+| None of the above | Nice weather. Enjoy the day ("Calm weather today" when cloudy) |
 
-    ```text
-    +------------------------------+
-    |                              |
-    |                          +------+
-    |                          |  P3  |
-    |                          +------+
-    |                              |
-    |                       +---------+
-    |                       |   CN1   |      +--------+
-    |                       |  GND[X] |------| [X]GND |
-    |                       | IO22[X] |------| [X]SCL |
-    |                       | IO27[X] |------| [X]SDA |
-    |                       | 3.3V[X] |------| [X]VCC |
-    |                       +---------+      | [ ]3Vo | 
-    |                              |         +--------+
-    |                          +------+         SHT40
-    |                          |  SD  |
-    |                          | CARD |
-    |                          +------+
-    |                              |
-    | +--+ +-------+ +-----------+ |
-    +-|  |-| USB C |-| MICRO USB |-+
-      +--+ +-------+ +-----------+ 
-             ESP32-2432S028R  
-    ```
+- **Priority:** the most urgent message wins. Urgent ones blink their icon: storm, snow, rain soon and freezing night.
+- **Updates:** the forecast comes from Open-Meteo (no API key) every 15 minutes. The message is re-checked every 15 seconds, so "Rain in ~N min" counts down.
 
-    ```text
-    +------------------------------+
-    |                              |
-    |                          +------+
-    |                          |  P3  |
-    |                          +------+
-    |                              |
-    |                       +---------+
-    |                       |   CN1   |      +--------+
-    |                       |  GND[X] |------| [X]GND |
-    |                       | IO22[X] |------| [X]SCL |
-    |                       | IO21[X] |------| [X]SDA |
-    |                       | 3.3V[X] |------| [X]VCC |
-    |                       +---------+      | [ ]3Vo | 
-    |                              |         +--------+
-    |                          +------+         SHT40
-    |                          |  SD  |
-    |                          | CARD |
-    |                          +------+
-    |                              |
-    | +--+           +-----------+ |
-    +-|  |-----------| MICRO USB |-+
-      +--+           +-----------+ 
-             ESP32-3248S035C  
-    ```
+### Weather page
 
-### Local Sensor Calibration
+The next hours, with temperature and chance of rain, and the next 7 days with highs and lows.
 
-Sensors mounted near the CYD board often pick up residual heat radiated by the ESP32 chip and LCD backlight (self-heating), resulting in temperature readings that are slightly high and relative humidity readings that are slightly low. You can calibrate both values using single-point linear offsets via the on-device Settings screen, the Web Settings UI, or MQTT/Home Assistant.
+### To-do
 
-#### 1. Temperature Calibration (Known Accurate Secondary Device)
-1. Place a trusted, known-accurate digital thermometer right beside the CYD's local sensor.
-2. Allow both devices to stabilize in the room for at least 30–60 minutes away from direct drafts, sunlight, or airflow.
-3. Compare the readings:
-   $$\text{Temperature Offset} = T_{\text{reference}} - T_{\text{CYD}}$$
-   *Example:* If your reference thermometer reads $72.0^\circ\text{F}$ and the CYD reads $74.5^\circ\text{F}$, set the **Temperature Offset** to `-2.5`.
-4. Enter this offset in the **Settings** screen (or Web UI / MQTT).
+- **Day page:** like a bullet journal, urgent tasks come first, then the rest, with done tasks ticked in green. A tap ticks a task.
+- **Carry-over:** open tasks from earlier days stay on the list until they are done.
+- **Phone:** you write and plan the list on your phone; scan the QR code on the page to open it.
+- **Storage:** the list is stored on the clock, nothing in the cloud.
 
-#### 2. Humidity Calibration (Saturated Salt Test Method)
-For accurate relative humidity calibration, the standard and recommended method is the **Saturated Salt (NaCl) Slurry Test** (see [wikiHow: How to Test a Hygrometer](https://www.wikihow.com/Test-a-Hygrometer) for a detailed visual guide), which creates an exact **75% Relative Humidity** sealed environment at room temperature:
-1. In a small, shallow container (like a bottle cap or small cup), mix ordinary table salt with a few drops of water until it forms a thick, wet slush or slurry (all salt should be wet, but with no free-standing liquid water on top).
-2. Place the salt container along with the sensor (or entire board if wired directly) inside an airtight container or zip-top freezer bag. *Ensure no salt water directly touches the sensor.*
-3. Seal the bag completely and let it sit at room temperature for at least 6–8 hours to reach equilibrium.
-4. Check the humidity reading without unsealing the bag:
-   $$\text{Humidity Offset} = 75\% - H_{\text{CYD}}$$
-   *Example:* If the CYD reads $79\%$ inside the sealed 75% RH salt container, set the **Humidity Offset** to `-4.0%`.
-5. Enter this offset in the **Settings** screen (or Web UI / MQTT).
+### Setup
 
-## :floppy_disk: MicroSD Card Logging & Auto-Formatting
+- **Sidebar:** five sections on the left:
 
-The weather station periodically logs weather reports to a microSD card in CSV format.
+  | Section | What you set |
+  |---|---|
+  | **Network** | Wi-Fi (scan and type the password on a keyboard) |
+  | **Weather** | Zip code and time zone |
+  | **Audio** | Alarm volume and a test sound |
+  | **Look** | Theme, brightness, units and 24-hour time |
+  | **System** | Sensor and version |
 
-> [!WARNING]
-> **Auto-Formatting Warning:** If the inserted microSD card fails to mount (e.g., if it is formatted as exFAT or uses a GPT partition scheme), the firmware will **automatically format the card to FAT32** on boot. This will **permanently delete all existing data** on the card.
-> 
-> To prevent data loss, ensure that any card you insert is either empty, or pre-formatted as **FAT32** with a **Master Boot Record (MBR)** partition scheme (GUID/GPT partition tables are not supported).
+- **QR button:** opens the phone pages.
 
-## :camera: Screenshots
+### Reliability
 
-### Device UI Showcase
+- **Event log:** kept on flash and shown at `/log`. It records the boot reason, Wi-Fi changes, the alarm (ring, snooze, stop), slow loops and names saved.
+- **Watchdog:** the clock restarts if the main loop stops for 60 seconds.
+- **Settings backup:** Wi-Fi, zip code, time zone and the alarm are also kept in `/config.json`. If the settings store is ever empty at start, the clock restores them from that file.
+- **Responsive touch:** the web server runs in its own task, so the touch screen stays responsive while a phone is connected.
 
-| Screen | Landscape (320x240) | Portrait (240x320) |
+## Screens
+
+| | | |
 |---|---|---|
-| **Current Weather** | ![Landscape Current](screenshots/landscape_current.png) | ![Portrait Current](screenshots/portrait_current.png) |
-| **3-Day Forecast** | ![Landscape Forecast](screenshots/landscape_forecast.png) | ![Portrait Forecast](screenshots/portrait_forecast.png) |
-| **24-Hour Forecast** | ![Landscape Hourly](screenshots/landscape_hourly.png) | ![Portrait Hourly](screenshots/portrait_hourly.png) |
-| **System Settings** | ![Landscape Settings](screenshots/landscape_settings.png) | ![Portrait Settings](screenshots/portrait_settings.png) |
+| <img src="docs/images/clock.png" width="240"><br>Clock with the weather and a calm message | <img src="docs/images/clock-rain.png" width="240"><br>Rain coming | <img src="docs/images/clock-storm.png" width="240"><br>Storm coming (blinking icon) |
+| <img src="docs/images/set-time.png" width="240"><br>Set the alarm time | <img src="docs/images/set-countdown.png" width="240"><br>Count down (down arrow lit) | <img src="docs/images/name-keyboard.png" width="240"><br>Name keyboard |
+| <img src="docs/images/ringing.png" width="240"><br>Ringing, with the name in bold | <img src="docs/images/menu.png" width="240"><br>Page menu (tap empty space) | <img src="docs/images/weather.png" width="240"><br>Weather: hours and 7 days |
+| <img src="docs/images/todo.png" width="240"><br>To-do with the QR code | <img src="docs/images/qr.png" width="240"><br>Open the phone page | <img src="docs/images/clock-freezing.png" width="240"><br>Freezing night |
+| <img src="docs/images/setup-weather.png" width="240"><br>Setup: Weather | <img src="docs/images/setup-audio.png" width="240"><br>Setup: Audio | <img src="docs/images/setup-look.png" width="240"><br>Setup: Look |
 
-The device supports capturing the current screen as a standard 24-bit BMP image via two methods:
+Phone pages:
 
-### Remote Settings, Web Dashboard & API
+<p>
+  <img src="docs/images/phone-home.png" width="260" alt="Phone home page">
+  <img src="docs/images/phone-todo.png" width="260" alt="Phone to-do page">
+</p>
 
-> [!NOTE]
-> The Settings Web UI, Dashboard, and Configuration API are available while the device is connected to Wi-Fi. Access the device via IP address (printed to serial: `[WiFi] Connected! IP address: <IP>`) or mDNS hostname: `http://<hostname>.local/` (default: `http://cyd-weather-station.local/`).
+## Flows
 
-**Web Dashboard:**
-Navigate to `http://<DEVICE_IP>/` or `http://cyd-weather-station.local/` in any browser to access the central Catppuccin-themed dashboard landing page. From here, you can access:
-- **⚙️ Device Settings (`/settings`)**: Configure all device parameters at runtime (Units, Theme, Screen & LED Brightness, Timezone, Hostname, Weather Update Interval, Screensaver Timeout, Static IP, AP Password, API Server, SD Settings, MQTT, etc.) and save them without reflashing.
-- **🔄 Firmware Update (`/update`)**: Flash new firmware binaries wirelessly.
-- **📸 View Screenshot (`/screenshot`)**: Stream a pixel-perfect image of the current screen (if enabled). Includes inline status indicators and help prompts.
-- **🗑️ Clear SD Logs (`/clear_logs`)**: Delete the weather history CSV file (`/weather_history.csv`) stored on the microSD card.
-- **🗑️ Clear SD Cache (`/clear_cache`)**: Delete the weather cache JSON file (`/weather_cache.json`) stored on the microSD card.
-- **⚠️ Factory Reset (`/reset`)**: Completely erase NVS settings and saved Wi-Fi credentials to reboot the device into AP Setup mode.
+### Moving between pages
 
-**Capture Screenshot:**
-```bash
-# Save to file
-curl http://<DEVICE_IP>/screenshot -o screenshot.bmp
+There is no tab bar. A tap on any empty part of the screen slides up a menu of big buttons.
 
-# View inline (if ImageMagick is installed)
-curl -s http://<DEVICE_IP>/screenshot | display -
+```mermaid
+flowchart LR
+    Clock -- tap empty space --> Menu
+    Weather -- tap empty space --> Menu
+    Todo[To-do] -- tap empty space --> Menu
+    Menu -- Clock --> Clock
+    Menu -- Weather --> Weather
+    Menu -- To-do --> Todo
+    Menu -- Setup --> Setup
+    Setup -- Back --> Clock
+    Setup -- QR --> QR[QR code for the phone]
 ```
 
-**Get Configuration Settings:**
-Retrieve the current settings in JSON format:
-```bash
-curl http://<DEVICE_IP>/api/config
+### Setting an alarm
+
+```mermaid
+flowchart TD
+    A[Clock page] -->|tap the bell| B[Set popup]
+    B -->|down arrow off| C[Alarm at: type hour and minute, AM/PM]
+    B -->|down arrow on| D[Alarm in: type hours and minutes]
+    C --> E{Name?}
+    D --> E
+    E -->|tap Name| F[Name keyboard]
+    F -->|OK| G[Name shown on the button]
+    F -->|Cancel| B
+    E -->|no name| H
+    G --> H[Save or Start]
+    H --> I[Bell shows the alarm time and the time left]
 ```
 
-Example JSON response:
-```json
-{
-  "unit_system": 2,
-  "brightness": 75,
-  "auto_brightness": false,
-  "show_title_version": true,
-  "timezone": "America/New_York",
-  "theme_flavor": 1,
-  "sd_logging_enabled": true,
-  "screenshot_server_enabled": false,
-  "hostname": "cyd-weather-station",
-  "api_server_enabled": true,
-  "screen_orientation": 1,
-  "led_enabled": true,
-  "led_brightness": 60,
-  "mqtt_enabled": true,
-  "mqtt_server": "192.168.1.88",
-  "mqtt_port": 1883,
-  "mqtt_user": "user",
-  "mqtt_password": "password",
-  "mqtt_base_topic": "cyd/",
-  "wifi_ssid": "Your_SSID",
-  "wifi_password": "Your_Password",
-  "sd_cache_enabled": true,
-  "screensaver_enabled": false,
-  "screensaver_timeout": 300000,
-  "sleep_schedule_enabled": false,
-  "sleep_start_time": "22:00",
-  "sleep_end_time": "07:00",
-  "weather_update_interval": 15,
-  "static_ip_enabled": false,
-  "static_ip": "192.168.1.8",
-  "static_gateway": "192.168.1.1",
-  "static_subnet": "255.255.255.0",
-  "static_dns": "1.1.1.1",
-  "ap_password": "",
-  "zip_code": "90210",
-  "city_code": "",
-  "latitude": "",
-  "longitude": "",
-  "owm_api_key": "",
-  "ntp_server": "pool.ntp.org",
-  "use_24_hour_format": false,
-  "local_sensor_enabled": true,
-  "local_sensor_type": 1,
-  "local_sensor_update_interval": 60,
-  "local_sensor_temp_offset": 0.0,
-  "local_sensor_hum_offset": 0.0
-}
+A name is kept only after you press **OK** on the keyboard and then **Save** (or **Start** for a count down).
+
+### When the alarm rings
+
+```mermaid
+flowchart TD
+    R[Alarm time reached] --> S[Ringing screen: time, bold name, beep]
+    S -->|Snooze| Z[Quiet for 9 min] --> S
+    S -->|Stop| X[Back to the clock. A once or count down alarm switches itself off]
+    S -->|no answer for 5 min| N{Third time?}
+    N -->|no| Z
+    N -->|yes| X
 ```
 
-**Update Configuration Settings:**
-Update any subset of device settings dynamically by posting a JSON payload:
-```bash
-curl -X POST -H "Content-Type: application/json" \
-  -d '{"brightness": 80, "theme_flavor": 2}' \
-  http://<DEVICE_IP>/api/config
+Snooze and Stop also work from the phone page `/alarm` and from the API.
+
+### Choosing the weather message
+
+```mermaid
+flowchart TD
+    W[Hourly forecast, every 15 min] --> P{Storm now or within 3 h?}
+    P -->|yes| M1[Storm message, blinking]
+    P -->|no| Q{Snow within 3 h?}
+    Q -->|yes| M2[Snow soon]
+    Q -->|no| R{Rain now, in 1-2 h, in 3-8 h?}
+    R -->|yes| M3[Raining / Rain in ~N min / Rain later]
+    R -->|no| F{Freezing night within 12 h?}
+    F -->|yes| M4[Freezing night]
+    F -->|no| T{10 °F change within 3 h?}
+    T -->|yes| M5[Getting colder / Warming up]
+    T -->|no| H{Hot or foggy?}
+    H -->|yes| M6[Hot today / Foggy]
+    H -->|no| M7[Nice weather]
 ```
 
-Response:
-```json
-{"status":"ok"}
+### First start and Wi-Fi
+
+```mermaid
+flowchart TD
+    B[Power on] --> K{Wi-Fi saved?}
+    K -->|yes| C[Connect, get the time by NTP, fetch the weather]
+    K -->|no| P[Setup, Network: scan, pick, type the password]
+    P --> C
+    K -->|no, from a phone| AP[Join the clock's access point, enter Wi-Fi and zip code in the portal]
+    AP --> C
+    C --> L[Clock page]
 ```
 
-### Physical BOOT button capture
-
-Press and hold the **BOOT button** (GPIO 0) on the CYD board for 2 seconds. The screenshot is saved to the SD card root as `/screenshot_YYYYMMDD_HHMMSS.bmp` (NTP-synced timestamp). A single quick press of the BOOT button triggers an immediate weather refresh.
-
-Serial output confirms the save:
-```
-[System] BOOT button pressed. Taking screenshot...
-[Screenshot] Capture started: /screenshot_20260711_135852.bmp
-[Screenshot] Capture complete.
-```
-
----
-
-## :rocket: Getting Started
-
-### 1. Quick Install (Pre-compiled Binaries)
-
-**Option A: Web Flasher (Easiest)**
-You can easily flash the pre-compiled firmware directly from your browser using the [ESP32 Web Flasher](https://nicholaswilde.io/esp32-web-flasher/). This requires a Web Serial compatible browser (like Chrome or Edge).
-
-**Option B: Terminal Flash Script**
-Alternatively, you can flash the device directly from your terminal using the provided flash script. Replace `/dev/ttyUSB0` with your actual serial port. By default, it flashes the `cyd_28r` version, but you can specify the device as the first argument.
-
-```bash
-# Flash the default cyd_28r (2.8" resistive 320x240 screen)
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/nicholaswilde/cyd-weather-station/main/scripts/flash.sh)" _ cyd_28r /dev/ttyUSB0
-
-# Or flash the cyd_28c version (2.8" capacitive 320x240 screen)
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/nicholaswilde/cyd-weather-station/main/scripts/flash.sh)" _ cyd_28c /dev/ttyUSB0
-
-# Or flash the cyd_28_nm version (2.8" NodeMiner ST7789 320x240 screen)
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/nicholaswilde/cyd-weather-station/main/scripts/flash.sh)" _ cyd_28_nm /dev/ttyUSB0
-
-# Or flash the cyd_35c version (3.5" capacitive 480x320 screen)
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/nicholaswilde/cyd-weather-station/main/scripts/flash.sh)" _ cyd_35c /dev/ttyUSB0
-```
-
-> [!WARNING]
-> Running a script directly from the internet with `bash -c "$(curl...)"` is a potential security risk. Always review the script's source code before executing it to ensure it is safe. You can view the script [here](https://github.com/nicholaswilde/cyd-weather-station/blob/main/scripts/flash.sh).
-
-### 2. Build from Source
-
-#### Secrets Setup
-
-Wi-Fi credentials and API keys live in a Git-ignored secrets file to prevent committing them.
-
-1. Copy the template:
-   ```bash
-   task init
-   ```
-   *(Or manually: `cp config/secrets.h.example config/secrets.h`)*
-
-2. Edit `config/secrets.h`:
-   ```cpp
-   #define WIFI_SSID     "Your_WiFi_Network"
-   #define WIFI_PASSWORD "Your_WiFi_Password"
-
-   // (Optional) Secure the configuration AP with a password (at least 8 chars).
-   // Leave blank ("") or comment out to run an open Access Point.
-   // This can also be changed at runtime via the Web Settings UI.
-   #define AP_PASSWORD ""
-
-   // (Optional) Set your API key here to use OpenWeatherMap instead of Open-Meteo.
-   // If left empty (""), Open-Meteo API will be used as a fallback.
-   #define OPENWEATHERMAP_API_KEY "YOUR_OPENWEATHERMAP_API_KEY"
-   ```
-
-#### Configuration
-
-Static settings (location, update interval) live in [`config/config.h`](config/config.h). Runtime user preferences (units, brightness, theme, timezone) are changed via the on-device **Settings tab** and saved to flash.
-
-**Location:**
-Location (Zip Code, City Code, or Coordinates) is configured dynamically via the **Captive Portal Wi-Fi Manager** when the device boots in AP mode. You can pre-configure the fallback defaults in `config/config.h`:
-```cpp
-// Default values (if not configured via Wi-Fi Setup)
-#define WEATHER_ZIP_CODE  "90210"
-#define WEATHER_API_LATITUDE  ""
-#define WEATHER_API_LONGITUDE ""
-
-// City Code (For OpenWeatherMap only)
-#define WEATHER_CITY_CODE ""
-```
-*(Note: If you leave these fields empty in both the code and the Wi-Fi Setup page, the device will automatically detect your location via IP Geolocation).*
-
-**Weather update interval:**
-You can change the update interval dynamically via the Web Settings UI, or set the default fallback here:
-```cpp
-#define WEATHER_UPDATE_INTERVAL_MINS 15
-```
-
-**Screensaver:**
-The screensaver timeout can be adjusted dynamically via the Web Settings UI. Defaults are configured here:
-```cpp
-#define SCREENSAVER_ENABLED     true
-#define SCREENSAVER_TIMEOUT_MS  300000 // 5 minutes (in milliseconds)
-```
-
-**Sleep Schedule:**
-The sleep schedule can be configured dynamically via the Web Settings UI or MQTT. Defaults are configured in `config/config.h`:
-```cpp
-#define DEFAULT_SLEEP_SCHEDULE_ENABLED false
-#define DEFAULT_SLEEP_START_TIME       "22:00"
-#define DEFAULT_SLEEP_END_TIME         "07:00"
-```
-
-**Static IP:**
-Static IP can be configured directly in the Web Settings UI at runtime. Alternatively, you can uncomment the static IP settings block in `config/config.h` to set the default fallback values. If kept blank or commented out, the device will default to DHCP:
-```cpp
-// #define STATIC_IP          "192.168.1.100"
-// #define STATIC_GATEWAY     "192.168.1.1"
-// #define STATIC_SUBNET      "255.255.255.0"
-// #define STATIC_DNS         "1.1.1.1"
-```
-
-**Display performance** — tune animation smoothness vs. touch responsiveness:
-```cpp
-// Height of the LVGL draw buffer (pixel rows).
-// Larger = smoother animation; too large = unresponsive touch.
-// Sweet spot on CYD hardware: 25–35.
-#define DISPLAY_DRAW_BUF_ROWS 30
-
-// How often LVGL redraws changed areas (ms). Range: 10–30.
-#define DISPLAY_REFR_PERIOD_MS 20
-
-// How often LVGL polls the touchscreen (ms). Keep <= DISPLAY_REFR_PERIOD_MS.
-#define DISPLAY_INDEV_READ_PERIOD_MS 10
-
-// Duration of the tab-switch swipe animation (ms). LVGL default: 300.
-#define DISPLAY_SWIPE_ANIM_MS 150
-```
-
-#### Build & Upload
-
-```bash
-task build    # Compile firmware
-task upload   # Flash to the connected CYD board
-task monitor  # Open serial monitor (115200 baud)
-```
-
----
-
-## :gear: Settings Tab Reference
-
-All settings below are configured by touch on the device and saved to flash:
-
-| Setting | Description |
-| :--- | :--- |
-| **Unit (C/F)** | Toggle between Celsius and Fahrenheit. |
-| **Auto Light** | Enable/disable LDR-driven automatic backlight control. |
-| **Brightness** | Manual backlight level slider (disabled when Auto Light is on). |
-| **Theme** | Catppuccin flavor selector — Mocha / Macchiato / Frappé / Latte. Full UI redraws on change. |
-| **Timezone** | IANA timezone selector (– / + buttons) with automatic DST transitions via AceTime. |
-| **SD Log** | Toggle SD card weather logging. Disabled automatically if no card is inserted. |
-| **SD Cache** | Toggle SD card weather caching. |
-| **API Srv** | Toggle the remote screenshot & configuration HTTP API server on/off. |
-| **Local Sensor** | Toggle reading local temperature/humidity sensor on/off. |
-| **Sensor Interval** | Slider adjusting local sensor read interval (seconds) with live preview. |
-| **Temp Offset** | Numerical input with themed on-screen numeric keypad to set temperature offset (supports decimals). |
-| **Hum Offset** | Numerical input with themed on-screen numeric keypad to set humidity offset (supports decimals). |
-| **Status LED** | Toggle RGB status LED feedback on/off. |
-| **LED Brightness** | Manual RGB status LED brightness level slider. |
-| **Scr Saver** | Toggle the screensaver on/off. |
-| **Sleep Sched** | Toggle the sleep schedule on/off. |
-| **MQTT** | Toggle publishing weather variables to MQTT topics. |
-
----
-
-### Timezone Configuration (AceTime & IANA)
-
-The CYD Weather Station integrates [`bxparks/AceTime`](https://github.com/bxparks/AceTime) to provide full IANA timezone database support (e.g. `America/Los_Angeles`, `Europe/London`) and automatically manages Daylight Saving Time (DST) transitions year-round without manual intervention.
-
-You can configure the timezone via:
-1. **On-Device Settings Tab**: Cycle through presets using `–` / `+` buttons.
-2. **Web Settings Portal (`/settings`)**: Select from an interactive dropdown containing over 400 IANA timezone options.
-3. **REST API (`/api/config`)**: Send a JSON payload updating the `"timezone"` field.
-4. **MQTT**: Publish to `<base_topic>command/timezone` or control via Home Assistant's Select entity.
-5. **Config File**: Set the compile-time default in [`config/config.h`](config/config.h).
-
-The device UI Settings tab allows cycling through the following common presets:
-
-| Region | Preset Display | IANA String |
-| :--- | :--- | :--- |
-| **UTC** | UTC | `UTC` |
-| **New York** | New York | `America/New_York` |
-| **Chicago** | Chicago | `America/Chicago` |
-| **Denver** | Denver | `America/Denver` |
-| **Los Angeles** | Los Angeles | `America/Los_Angeles` |
-| **London** | London | `Europe/London` |
-| **Berlin** | Berlin | `Europe/Berlin` |
-| **Sydney** | Sydney | `Australia/Sydney` |
-| **Tokyo** | Tokyo | `Asia/Tokyo` |
-
----
-
-### :satellite: MQTT Topics & Home Assistant Integration
-
-When MQTT is enabled in settings, the CYD Weather Station connects to your configured MQTT broker and provides state telemetry, Home Assistant auto-discovery, system diagnostics, and bidirectional remote control commands.
-
-> [!NOTE]
-> All telemetry, state, and command topics are prefixed with your configurable **MQTT Base Topic** (default: `cyd/`). Home Assistant auto-discovery topics always use the standard `homeassistant/` root prefix.
-
-#### Telemetry & State Topics
-
-| Topic | Description | Example / Values |
-| :--- | :--- | :--- |
-| `<base_topic>status` | Connection availability (LWT) | `online` / `offline` |
-| `<base_topic>weather/temperature` | Current temperature | `72` |
-| `<base_topic>weather/humidity` | Current relative humidity | `45` |
-| `<base_topic>weather/wind_speed` | Current wind speed | `8` |
-| `<base_topic>weather/wind_direction` | Current wind direction | `NW` |
-| `<base_topic>weather/status` | Current weather condition | `Partly Cloudy` |
-| `<base_topic>weather/city` | Resolved city name | `Seattle` |
-| `<base_topic>system/uptime` | Device uptime (seconds) | `3600` |
-| `<base_topic>system/free_heap` | Free heap memory (bytes) | `184320` |
-| `<base_topic>system/wifi_rssi` | Wi-Fi signal strength (dBm) | `-58` |
-| `<base_topic>system/ip` | Device IP address | `192.168.1.150` |
-| `<base_topic>system/version` | Firmware version string | `v0.1.22` |
-| `<base_topic>system/mac` | Device MAC address | `B0:CB:D8:DA:77:5C` |
-| `<base_topic>settings/brightness` | Screen brightness percentage | `0`–`100` |
-| `<base_topic>settings/led_brightness` | Status LED brightness percentage | `0`–`100` |
-| `<base_topic>settings/auto_brightness` | Auto brightness switch state | `ON` / `OFF` |
-| `<base_topic>settings/screensaver` | Screensaver switch state | `ON` / `OFF` |
-| `<base_topic>settings/theme` | Catppuccin theme flavor | `Mocha` / `Macchiato` / `Frappe` / `Latte` |
-| `<base_topic>settings/units` | Unit system | `Imperial` / `Metric` |
-| `<base_topic>settings/screen_orientation`| Display orientation | `Landscape` / `Portrait` / `Landscape Rev` / `Portrait Rev` |
-| `<base_topic>settings/update_interval` | Weather update interval (mins) | `15` |
-| `<base_topic>settings/screensaver_timeout`| Screensaver timeout (mins) | `5` |
-| `<base_topic>settings/sleep_schedule` | Sleep schedule switch state | `ON` / `OFF` |
-| `<base_topic>settings/sleep_start` | Sleep schedule start time | `22:00` |
-| `<base_topic>settings/sleep_end` | Sleep schedule end time | `07:00` |
-| `<base_topic>settings/timezone` | Configured IANA timezone string | `America/New_York` |
-| `<base_topic>settings/hostname` | Configured device hostname | `cyd-weather-station` |
-| `<base_topic>settings/led` | Status LED enabled switch state | `ON` / `OFF` |
-| `<base_topic>settings/sd_log` | SD logging enabled switch state | `ON` / `OFF` |
-| `<base_topic>settings/sd_cache` | SD caching enabled switch state | `ON` / `OFF` |
-
-#### Remote Control Topics
-
-| Topic | Payload | Action |
-| :--- | :--- | :--- |
-| `<base_topic>command/brightness` | `0`–`100` | Adjusts the screen backlight brightness percentage and saves setting. |
-| `<base_topic>command/led_brightness` | `0`–`100` | Adjusts the status LED brightness percentage (0-100% mapped to hardware 0-255). |
-| `<base_topic>command/auto_brightness`| `ON` / `OFF` / `1` / `0` | Enables or disables ambient light-based automatic brightness. |
-| `<base_topic>command/screensaver` | `ON` / `OFF` / `1` / `0` | Enables or disables the screensaver. |
-| `<base_topic>command/sleep_schedule` | `ON` / `OFF` / `1` / `0` | Enables or disables the sleep schedule. |
-| `<base_topic>command/sleep_start` | `HH:MM` | Sets the sleep schedule start time (24-hour format). |
-| `<base_topic>command/sleep_end` | `HH:MM` | Sets the sleep schedule end time (24-hour format). |
-| `<base_topic>command/timezone` | `America/Los_Angeles` | Sets the device IANA timezone string with dynamic DST recalculation. |
-| `<base_topic>command/hostname` | `cyd-weather-station` | Sets the device network hostname and mDNS address. |
-| `<base_topic>command/theme` | `Mocha` / `Macchiato` / `Frappe` / `Latte` | Changes the active Catppuccin theme flavor. |
-| `<base_topic>command/units` | `Imperial` / `Metric` | Changes the temperature and wind speed unit system. |
-| `<base_topic>command/screen_orientation`| `Landscape` / `Portrait` / `Landscape Rev` / `Portrait Rev` | Changes display orientation dynamically. |
-| `<base_topic>command/update_interval` | `1`–`120` | Sets the weather fetch update interval in minutes. |
-| `<base_topic>command/screensaver_timeout`| `1`–`60` | Sets screensaver activation inactivity timeout in minutes. |
-| `<base_topic>command/led` | `ON` / `OFF` / `1` / `0` | Enables or disables the onboard status RGB LED. |
-| `<base_topic>command/sd_log` | `ON` / `OFF` / `1` / `0` | Enables or disables SD card weather history logging. |
-| `<base_topic>command/sd_cache` | `ON` / `OFF` / `1` / `0` | Enables or disables SD card weather caching. |
-| `<base_topic>command/reboot` | `REBOOT` / `1` / `true` / `ON` | Reboots the ESP32 weather station. |
-
-#### Home Assistant MQTT Discovery
-On connection, the device automatically registers itself as `CYD Weather Station <short_mac>` with full device hierarchy and exposes the following entities to Home Assistant:
-- **Weather Sensors**: Temperature (°F/°C), Humidity (%), Wind Speed (mph/m/s), Wind Direction, Weather Condition, City Name.
-- **Diagnostics Sensors**: Connection Status (binary sensor), Uptime (s), Free Memory (B), Wi-Fi Signal (dBm), IP Address, Firmware Version, MAC Address.
-- **Controls & Sliders (Numbers)**: Screen Brightness (0–100%), LED Brightness (0–100%), Weather Update Interval (1–120 min), Screensaver Timeout (1–60 min).
-- **Configuration Switches**: Auto Brightness, Screensaver, Sleep Schedule, Status LED, SD Log, SD Cache.
-- **Text Controls**: Sleep Start Time, Sleep End Time, Hostname.
-- **Dropdown Selectors**: Theme Flavor, Unit System, Screen Orientation, Timezone.
-- **Buttons**: Device Reboot.
-
-#### Connection Management & Reconnect Backoff
-If the MQTT broker goes offline or becomes unreachable, the weather station will automatically attempt to reconnect using an **exponential backoff** strategy (doubling the reconnect delay from 5s up to a maximum of 2 minutes) to prevent network congestion. Reconnect intervals reset back to 5s upon a successful connection. Auto-discovery payloads are throttled with asynchronous FreeRTOS pacing to ensure reliable network transmission without packet loss.
-
----
-
-## :computer: Development
-
-This project is built with **PlatformIO** and supports both ESP32 hardware builds and native desktop mock testing via a CMock/Unity test suite.
-
-### Custom Weather Icon Font
-
-Weather icons use Erik Flowers' Weather Icons font converted to LVGL C source via `lv_font_conv`.
-
-1. Install Node.js dependencies:
-   ```bash
-   task setup:node
-   ```
-2. Regenerate the font:
-   ```bash
-   task font:generate
-   ```
-
-### Command Reference
-
-| Action | Task Command | PlatformIO Equivalent | Description |
-| :--- | :--- | :--- | :--- |
-| **Initialize** | `task init` | `cp config/secrets.h.example config/secrets.h` | Copies the secrets template. |
-| **Build** | `task build` | `pio run` | Compiles the ESP32 firmware. |
-| **Upload** | `task upload` | `pio run --target upload` | Flashes firmware to the CYD board. |
-| **Monitor** | `task monitor` | `pio device monitor` | Opens the serial monitor at 115200 baud. |
-| **Native Tests** | `task test` | `pio test -e native` | Runs mock unit tests on the host. |
-| **Pre-Flight Check** | `task test:preflight` | — | Builds all environments and runs unit tests. |
-| **API Tests** | `task test:api` | — | Runs live JSON API integration tests against the device. |
-| **Web Health Check** | `task test:web` | — | Verifies all HTTP endpoints respond and do not crash. |
-| **MQTT Tests** | `task test:mqtt` | — | Verifies MQTT broker connectivity and command handling. |
-| **OTA Update** | `task update:ota` | — | Compiles and flashes firmware wirelessly over the network. |
-| **Lint Check** | `task check` | `pio check` | Runs `cppcheck` static analysis. |
-| **Setup Node** | `task setup:node` | `npm install` | Installs `lv_font_conv` for font conversion. |
-| **Generate Font** | `task font:generate` | `npm run font:generate` | Rebuilds the weather icons C source from TTF. |
-| **Clean** | `task clean` | `pio run --target clean` | Removes build output and temp files. |
-
-## :wrench: Troubleshooting
-
-If you encounter any issues with your screen or the software, please review the solutions below or [create an issue](https://github.com/nicholaswilde/cyd-weather-station/issues) on GitHub if you are still stuck.
-
-### Inverted Colors
-If the colors on your display appear inverted (for example, dark themes like `Mocha`, `Macchiato`, or `Frappe` display with bright white backgrounds while the light `Latte` theme appears dark), this is due to hardware display controller differences between CYD batches. You can easily resolve it by:
-- Flashing the alternative inversion release for your board (e.g., `cyd_28r` vs `cyd_28r_inv`, `cyd_28c` vs `cyd_28c_inv`, `cyd_28_nm` vs `cyd_28_nm_inv`, or `cyd_35c` vs `cyd_35c_inv`).
-- Or, if building from source, switching to the corresponding `_inv` environment in PlatformIO or toggling the `-D TFT_INVERSION_ON=1` build flag.
-
-### Garbled or Scrambled Screen
-If the UI renders distorted, noisy, or with stretched fonts across the display, ensure you flashed the firmware matching your exact display size and controller:
-- **2.8" Resistive (ILI9341)**: `cyd_28r` / `cyd_28r_inv` (240x320)
-- **2.8" Capacitive (ESP32-2432W328C)**: `cyd_28c` / `cyd_28c_inv` (240x320)
-- **2.8" Resistive NodeMiner / ST7789 (`ESP32-2432S028`)**: `cyd_28_nm` / `cyd_28_nm_inv` (240x320)
-- **3.5" Capacitive (ST7796)**: `cyd_35c` / `cyd_35c_inv` (320x480)
-
-Flashing a 3.5" image onto a 2.8" display (or vice versa) will result in garbled screens due to framebuffer and resolution mismatches.
-
-### Partial Screen Rendering / 80px Noise Band (1/4 Screen)
-If the UI displays across only 240 columns while the right 80 columns show uninitialized static noise, your board likely has an **ST7789** controller or an alternative **ILI9341 clone** controller (common on `ESP32-2432S028` boards manufactured under "NM" / NodeMiner or 2-USB variants). Pre-configured environments `cyd_28_nm` and `cyd_28_nm_inv` are available for these boards directly in `platformio.ini`. See the detailed guide in [docs/hardware-variants.md](docs/hardware-variants.md) for background and build configurations (`ILI9341_2_DRIVER` or `ST7789_DRIVER`).
-
-### Flashing, Erasing Flash & Boot Reset
-- **Erasing Flash**: Running a full `erase_flash` wipes all non-volatile storage (NVS), which erases previously saved Wi-Fi credentials and configuration. The device will reboot into Access Point (`192.168.4.1`) setup mode. Reflashing without erasing preserves your Wi-Fi credentials and saved runtime settings.
-- **Bootloader Mode**: If flashing manually via serial (`esptool.py`), the ESP32 might remain in bootloader mode after writing. Press the physical **RESET / EN** button (or power cycle the unit) to boot into the application.
-
-### Local Temperature & Humidity Issues / SHT40 Troubleshooting
-Standard CYD boards (including `ESP32-2432W328C` and `CYD-2432S028`) do **not** come with an onboard ambient temperature/humidity sensor. If no external sensor is wired to the expansion header, the local sensor readings will remain empty. You can disable the local sensor tile in Settings (`/settings`) or connect a supported sensor (DHT11, DHT22, or SHT40).
-
-If you are using an **SHT40** sensor and it is failing to initialize or read:
-- **Use the CN1 Port**: Ensure you plug the sensor into the **CN1** connector (near the USB port). Connector **P3** (near the SD card slot) lacks a 3.3V power rail and cannot power the sensor.
-- **SDA Pin Selection**: On `cyd_28r` and `cyd_28_nm`, ensure **SDA** is wired to **IO27**. GPIO 21 is used for display backlight PWM (`TFT_BL`). On `cyd_35c` and `cyd_28c`, ensure **SDA** is wired to **IO21**. IO27 is used for the display backlight. Connecting I2C to the backlight pin will interfere with I2C communications and cause the screen backlight to dim or turn off.
-- **Swap SDA & SCL Lines**: If the SHT40 sensor is not recognized or reports `[Sensor] Failed to read from SHT40 sensor!`, try switching/swapping the **SDA** and **SCL** wiring pins (ensure `SDA = 27` (or 21) and `SCL = 22`).
-
-### RGB / BGR Swap
-If your screen has red and blue colors swapped, it means the display expects a BGR color order instead of RGB. A dedicated release is not currently provided for this variation, but you can fix it by building from source: simply append `-D TFT_RGB_ORDER=TFT_BGR` to your environment's `build_flags` in `platformio.ini`.
-
-### Touch Calibration (Resistive Screens)
-The 2.8" resistive version (`cyd_28r`) uses a resistive touch layer which can sometimes be misaligned or mapped to inverted coordinates depending on the batch. If touches are registering in the wrong place, you may need to run a touch calibration sketch to determine the correct offsets for your specific screen. Capacitive variants (`cyd_28c`, `cyd_35c`) do not require calibration.
-
-### Backlight Pin and Polarity Differences
-If your screen is completely black but the board seems to be running, it might be a backlight pin mapping issue. While most boards use GPIO 21 or 27 for the backlight (`TFT_BL`), some obscure batches might map it differently. Furthermore, some boards require `TFT_BACKLIGHT_ON=LOW` instead of `HIGH`. 
-
-### Different Driver Chips
-Most 2.8" screens use the `ILI9341` driver. However, occasionally manufacturers substitute it with an `ST7789V` driver without changing the board's appearance. This will result in a completely blank or noisy screen until you change the driver flag in your `platformio.ini` from `-D ILI9341_DRIVER=1` to `-D ST7789_DRIVER=1`.
-
-### SD Card Formatting
-The CYD board can be picky about SD cards. If you encounter a "Failed to initialize SD card" error:
-- Ensure the microSD card is formatted as **FAT32** (not exFAT).
-- Try to use an SD card that is 32GB or smaller.
-- Ensure it is inserted fully before booting the device.
-
-### Power Delivery Glitches
-Intermittent touch issues, screen flickering, or spontaneous reboots are frequently caused by inadequate power. Ensure you are using a high-quality USB power supply and a good USB cable that can supply the burst current the ESP32 and backlight need simultaneously.
-
-### Audio Output / DAC Pins
-If you ever intend to use the speaker connector on the back, be aware that the DAC pin mapping changes between board revisions. Sometimes it's mapped to GPIO 25, and sometimes GPIO 26.
-
-## :balance_scale: License
-
-[Apache License 2.0](LICENSE)
-
-## :writing_hand: Author
-
-This project was started in 2026 by [Nicholas Wilde](https://github.com/nicholaswilde/).
+## Phone pages and API
+
+From a phone on the same Wi-Fi, open `http://cyd-alarm-clock.local/`, or the clock's IP address shown under the QR code.
+
+| Page | What it does |
+|---|---|
+| `/` | Home: Clock, Weather, To-do, Settings, plus maintenance (event log, firmware update, clear weather cache, factory reset) |
+| `/alarm` | Name, wake in 6, 7 or 8 hours, exact time, every day, on/off, volume, snooze minutes, test and stop sound |
+| `/todo` | The day's list: add, mark urgent, tick, delete, clear done, move between days |
+| `/settings` | Wi-Fi, location, units, theme, time zone, sensor, MQTT |
+| `/log` | Event log |
+| `/update` | Firmware update over the air |
+
+| API | Method | Purpose |
+|---|---|---|
+| `/api/alarm` | GET, POST | Read or change the alarm (`hour`, `minute`, `enabled`, `repeat`, `name`, `volume`, `snooze_minutes`, `in_hours`) |
+| `/api/alarm/ring` | POST | Ring now (test) |
+| `/api/alarm/snooze` | POST | Snooze |
+| `/api/alarm/stop` | POST | Stop |
+| `/api/alarm/test` | POST | Play the alarm sound |
+| `/api/todo` | GET, POST | Read or replace the to-do list |
+| `/api/config` | GET, POST | Settings |
+| `/api/backup` | GET | What `/config.json` holds (the password length, not the password) |
+| `/reset?confirm=yes` | | Factory reset (needs `confirm=yes`) |
+
+Example:
+
+    curl -X POST http://cyd-alarm-clock.local/api/alarm \
+         -H "Content-Type: application/json" \
+         -d '{"hour":6,"minute":30,"enabled":true,"repeat":true,"name":"school"}'
+
+## Hardware
+
+- **Board:** ESP32-2432S028R ("Cheap Yellow Display"), a 2.8" ILI9341 320x240 screen with resistive touch (XPT2046).
+- **Speaker:** on the SPEAK connector (GPIO 26 through the on-board amplifier). The tiny built-in speaker works; a 4 ohm speaker is much louder.
+- **Optional:** a DHT22 sensor and an SD card, as in the upstream project.
+- **Other boards:** other CYD variants are listed in [docs/hardware-variants.md](docs/hardware-variants.md). This firmware is tested on the `cyd_28r` build.
+
+## Build and flash
+
+You need [PlatformIO](https://platformio.org/).
+
+1. **Wi-Fi (optional):** copy `config/secrets.h.example` to `config/secrets.h` and fill in your Wi-Fi. You can also set Wi-Fi on the screen. `secrets.h` is git-ignored.
+2. **Location:** set your zip code and time zone in `config/config.h`, or later in Setup. The defaults are 30062 and America/New_York.
+3. **Build and flash:**
+
+       pio run -e cyd_28r
+       pio run -e cyd_28r -t upload --upload-port COM5
+
+4. **Unit tests on the PC:**
+
+       pio test -e native
+
+The serial monitor runs at 115200 baud and takes these bench commands:
+
+| Key | Action |
+|---|---|
+| `r` | Ring the alarm |
+| `b` | Beep |
+| `s` | Stop |
+| `l` | Print the log |
+| `h` | Show free memory |
+| `t` | Turn the touch monitor on or off |
+
+## Project layout
+
+| Path | What |
+|---|---|
+| `src/ui_trip.cpp` | Clock page |
+| `src/ui_alarm.cpp` | Bell, Set popup, name keyboard, ringing screen |
+| `src/alarm_manager.cpp` | Alarm settings and snooze, stored in NVS |
+| `src/weather_alert.cpp` | Weather message bubble and its rules |
+| `src/ui_weather.cpp`, `src/weather_client.cpp` | Weather page and the Open-Meteo client |
+| `src/ui_todo.cpp`, `src/todo_manager.cpp` | To-do page and storage |
+| `src/ui_menu.cpp` | Slide-up page menu |
+| `src/ui_wifi.cpp` | Wi-Fi scan, keyboard and zip code pages |
+| `src/ui_qr.cpp` | QR codes for the phone pages |
+| `src/audio_player.cpp` | Beep through the DAC |
+| `src/event_log.cpp`, `src/config_backup.cpp` | Event log and the `/config.json` backup |
+| `src/wifi_manager.cpp`, `include/*_html.h` | Web server and phone pages |
+| `docs/PLAN.md` | The original plan |
+| `docs/UPSTREAM_README.md` | The cyd-weather-station README (settings, MQTT and OTA details) |
+
+## Credits and licenses
+
+- [cyd-weather-station](https://github.com/nicholaswilde/cyd-weather-station) by Nicholas Wilde, Apache-2.0. This project keeps its license ([LICENSE](LICENSE)).
+- Electronic Highway Sign font, from dafont.com, free per its author ([note](assets/fonts/ELECTRONIC-HIGHWAY-SIGN-NOTE.txt)).
+- Weather Icons by Erik Flowers, SIL OFL 1.1.
+- [LVGL](https://lvgl.io/) 8, MIT.
+- ESP8266Audio by Earle F. Philhower III, GPL-3.0.
+- Weather data from [Open-Meteo](https://open-meteo.com/), CC BY 4.0.
+- `assets/music/fur_elise.mp3`: a Für Elise recording by JMC Han, CC BY-SA 4.0, via Wikimedia Commons. The firmware no longer uses it.
