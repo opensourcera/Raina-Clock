@@ -10,6 +10,10 @@ You set everything on the touch screen or from a phone on the same Wi-Fi.
 
 It is built on [cyd-weather-station](https://github.com/nicholaswilde/cyd-weather-station) by Nicholas Wilde (Apache-2.0).
 
+<p align="center">
+  <img src="docs/images/raina-clock-photo.jpg" width="720" alt="Raina Clock on a desk in its lilac 3D-printed case">
+</p>
+
 <p>
   <img src="docs/images/clock.png" width="320" alt="Clock page">
   <img src="docs/images/ringing.png" width="320" alt="Alarm ringing">
@@ -255,7 +259,7 @@ Example:
 
 ## Case
 
-The clock sits in a 3D-printed, battery-powered desk case tilted at 32 degrees:
+The clock sits in a 3D-printed, battery-powered desk case tilted at 32 degrees (lilac, as in the photo at the top):
 
 - **Model:** "CYD Desk Buddy for Bambu Lab / Home Assistant" by **annaglyph** on [MakerWorld](https://makerworld.com/).
 - **Print profile:** "Battery Powered 32 Degree - 0.12mm layer, 2 walls, 15% infill" by **SFAJeff**. It adds room for a battery, a charger and a power button.
